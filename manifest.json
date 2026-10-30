@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI 评论回复助手（B站 / 今日头条 / 抖音）",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "description": "点击 B站、今日头条或抖音作品详情评论的回复按钮，结合评论与作品标题生成自然回复并填入输入框。",
   "permissions": ["storage", "scripting"],
   "host_permissions": ["https://www.doubao.com/*"],

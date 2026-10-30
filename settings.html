@@ -5,6 +5,7 @@
 <label>API Base URL（如 https://你的服务/v1，也支持完整 chat/completions 地址）<input id="baseUrl" type="url" required placeholder="https://api.example.com/v1"></label>
 <label>模型名称<input id="model" required placeholder="填写服务商提供的模型 ID"></label>
 <label>API Key<input id="apiKey" type="password" autocomplete="off" placeholder="仅保存在本机扩展存储"></label>
+<label>回复提示词（豆包和 API 共用）<textarea id="replyPrompt" rows="7" maxlength="12000"></textarea></label><button id="resetPrompt" type="button">恢复默认提示词</button><p>可修改专业身份、回复口吻和表达偏好，留空使用默认值；保存后生效。字数上限、评论上下文及事实约束仍由扩展补充。</p>
 <label>作者知识背景 / 项目实现说明<textarea id="context" rows="5" maxlength="20000" placeholder="填写项目真实机制、版本或技术要点。缺少依据时，AI 会以通用原理说明，不应编造项目事实。"></textarea></label>
 <label>回复最多字数<input id="maxChars" type="number" min="50" max="1000" value="240" required></label>
 <label><input id="enabled" type="checkbox" checked style="display:inline;width:auto"> 点击回复时启用自动生成填写</label>

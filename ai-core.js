@@ -1,5 +1,10 @@
 (function(root){
-  const defaults={baseUrl:'',model:'',apiKey:'',context:'',maxChars:240,enabled:true};
+  const defaultPrompt='你是一个AI大模型开发、运维专家。接下来会有一些用户在某些方面的评论，你需要根据用户的评论给出相应的回复。精简不啰嗦，字数不要过多，用1到3句话表达，让用户感受到你的专业；回答不要太人机，一定要像自然的评论区回复。\n帮内容作者写一条 B站、今日头条或抖音评论回复。口吻像作者看到评论后顺手回的一两句话，自然、直接，有技术底子。';
+  const defaults={baseUrl:'',model:'',apiKey:'',context:'',replyPrompt:defaultPrompt,maxChars:240,enabled:true};
+  function replyPrompt(c){
+    if(c.replyPrompt!=null&&(typeof c.replyPrompt!=='string'||c.replyPrompt.length>12000))throw Error('回复提示词最多 12000 字');
+    return c.replyPrompt?.trim()||defaultPrompt;
+  }
   function endpoint(base){
     const u=new URL(base.trim());
     if(u.username||u.password||u.search||u.hash) throw Error('API 地址不能含账号、查询参数或片段');
@@ -17,9 +22,11 @@
     return c;
   }
   function messages(c,item){
+    const prompt=replyPrompt(c);
     if(typeof item?.comment!=='string'||!item.comment.trim()||item.comment.length>6000) throw Error('评论为空或过长');
     return [{role:'system',content:[
-      `帮内容作者写一条 B站、今日头条或抖音评论回复。口吻像作者看到评论后顺手回的一两句话，自然、直接，有技术底子。只输出能直接填入评论框的回复，最多${c.maxChars}字；这是上限，不是要凑满的字数。`,
+      prompt,
+      `只输出能直接填入评论框的回复，最多${c.maxChars}字；这是上限，不是要凑满的字数。`,
       '先判断对方是在提问、补充、纠错、吐槽还是闲聊，接住他具体说的那一点。简单评论一句就够，技术问题一般两三句，复杂时才多解释。长短句自然搭配，能用日常说法就不用书面套话。保留必要的技术词，把原因讲清楚。',
       '不要每条都以“感谢你的反馈”“你提的问题很好”“确实如此”开头。不要“关于你的问题”“首先、其次、最后”“综上所述”“希望对你有所帮助”等报告或客服套话。不复述一遍评论，不先夸对方再回答，不强行分点、总结、升华。',
       '不用刻意卖萌、装熟或堆“哈哈、兄弟、亲、哦、呢、呀”和表情。对方开玩笑时可以轻松接一句，认真提问就认真解释，不要求每次都幽默。不为了显得像真人而编造自己的经历、测试、情绪或后续更新承诺。',
