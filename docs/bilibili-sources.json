@@ -1,0 +1,16 @@
+{
+  "fetched": "2026-10-30",
+  "page": "https://message.bilibili.com/",
+  "script": "https://s1.hdslb.com/bfs/static/2233-monorepo/message-pc/static/js/index.59878243.js",
+  "css": "https://s1.hdslb.com/bfs/static/2233-monorepo/message-pc/static/css/index.547d7edd.css",
+  "scriptSha256": "075A5499F2FFE3DC15FF68D41D709C475945FE463582E9FAB071408DE0B1661A",
+  "cssSha256": "E747112D9E6FB0B45CA0450DAF12B24B5B0F272315833082942CA0EC8A672083",
+  "selectors": {
+    "editor": "textarea.message-reply-box__input",
+    "comment": ".interaction-item__msg",
+    "row": ".interaction-item",
+    "publish": ".message-reply-box__pub (never activated)",
+    "reply": ".interaction-item__btn.reply"
+  },
+  "authority": "Public shipped bundle; authenticated DOM not captured"
+}

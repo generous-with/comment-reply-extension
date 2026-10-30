@@ -1,0 +1,13 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>AI 评论回复设置</title><link rel="stylesheet" href="options.css">
+<main><h1>AI 评论回复助手</h1><p>B站 / 今日头条 / 抖音：点击评论下方“回复”，结合评论和作品标题生成并填写；审核后由你手动发布。</p>
+<form id="form"><label>回复来源<select id="provider"><option value="doubao">豆包网页版（无需 API Key）</option><option value="api">OpenAI 兼容 API</option></select></label>
+<label>豆包评论会话网址（留空新建）<input id="doubaoUrl" type="url" placeholder="https://www.doubao.com/chat/"></label><p>豆包模式会打开专用会话标签页，需提前登录。使用你给出的专家口吻和每条评论独立上下文；浏览器会切换到豆包以完成输入。请不要同时手动操作该专用会话。评论、标题和作者背景将发送给豆包网页版，不调用模型 API。</p>
+<label>API Base URL（如 https://你的服务/v1，也支持完整 chat/completions 地址）<input id="baseUrl" type="url" required placeholder="https://api.example.com/v1"></label>
+<label>模型名称<input id="model" required placeholder="填写服务商提供的模型 ID"></label>
+<label>API Key<input id="apiKey" type="password" autocomplete="off" placeholder="仅保存在本机扩展存储"></label>
+<label>作者知识背景 / 项目实现说明<textarea id="context" rows="5" maxlength="20000" placeholder="填写项目真实机制、版本或技术要点。缺少依据时，AI 会以通用原理说明，不应编造项目事实。"></textarea></label>
+<label>回复最多字数<input id="maxChars" type="number" min="50" max="1000" value="240" required></label>
+<label><input id="enabled" type="checkbox" checked style="display:inline;width:auto"> 点击回复时启用自动生成填写</label>
+<p class="notice">启用后，点击“回复”会将该条评论、对应作品标题/描述、作品 ID（抖音）、页面可见引用，以及你填写的作者背景发送给所配置的 AI 服务，可能产生该服务的调用费用。API Key 仅交给你授权的服务，不发送给 B站、头条或抖音；本机存储未加密。</p>
+<button type="submit">保存并授权 API 域名</button> <button id="test" type="button">测试连接</button><p id="status" role="status"></p></form>
+<a href="https://message.bilibili.com/#/reply" target="_blank" rel="noreferrer">B站“回复我的”</a> · <a href="https://mp.toutiao.com/profile_v4/manage/comment/all?enter_from=left_menu" target="_blank" rel="noreferrer">今日头条评论管理</a> · <a href="https://creator.douyin.com/creator-micro/content/manage" target="_blank" rel="noreferrer">抖音内容管理</a><p>配置后刷新对应站点页面。抖音请进入具体作品详情的“评论管理”，点击该条评论的“回复”，不会填顶部通用评论框。优先读取作品完整标题/描述；只有截断文字时会标记给模型。不含头条子回复和 B站私信。</p></main><script src="ai-core.js"></script><script src="settings.js"></script></html>

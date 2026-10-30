@@ -1,0 +1,13 @@
+{
+  "name": "comment-reply-extension",
+  "version": "0.5.4",
+  "private": true,
+  "description": "Contextual comment reply drafts for Bilibili, Toutiao and Douyin",
+  "license": "MIT",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node --test verify.cjs bili-return.test.cjs toutiao.test.cjs douyin.test.cjs douyin-return.test.cjs doubao-answer.test.cjs doubao-prompt.test.cjs doubao-worker.test.cjs",
+    "test:smoke": "node smoke.cjs"
+  },
+  "devDependencies": { "playwright": "1.62.1" }
+}

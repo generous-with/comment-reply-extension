@@ -1,0 +1,83 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const vm=require('node:vm');
+const path=require('node:path');
+const ai=require('./ai-core.js');
+const config={...ai.defaults,baseUrl:'https://model.example/v1',model:'test-model',apiKey:'test-only-key'};
+test('OpenAI compatible contract, professional prompt and error handling',async()=>{
+  assert.equal(ai.endpoint('https://model.example/v1/'),'https://model.example/v1/chat/completions');
+  assert.equal(ai.endpoint('https://model.example/v1/chat/completions'),'https://model.example/v1/chat/completions');
+  assert.throws(()=>ai.endpoint('http://remote.example/v1'));
+  assert.throws(()=>ai.endpoint('https://name:pass@model.example/v1'));
+  assert.throws(()=>ai.validate({...config,model:''}));
+  let request;
+  const text=await ai.generate(config,{comment:'这个路由如何判断？'},async(url,options)=>{request={url,options};return {ok:true,json:async()=>({choices:[{message:{content:'通常需要结合模型名称和路由配置判断，具体以该项目实现为准。'}}]})};});
+  assert.ok(text.includes('路由配置'));
+  const body=JSON.parse(request.options.body);
+  assert.equal(JSON.parse(body.messages[1].content).comment,'这个路由如何判断？');
+  assert.ok(body.messages[0].content.includes('不得将通用原理说成该项目的实际机制'));
+  assert.equal(request.options.credentials,'omit');assert.equal(request.options.redirect,'error');
+  assert.equal(request.options.headers.Authorization,'Bearer test-only-key');
+  await assert.rejects(ai.generate(config,{comment:'x'},async()=>({ok:false,status:401})),/HTTP 401/);
+  await assert.rejects(ai.generate(config,{comment:'x'},async()=>({ok:true,json:async()=>({choices:[]})})),/未返回有效/);
+  await assert.rejects(ai.generate(config,{comment:'x'},async()=>({ok:true,json:async()=>({choices:[{message:{content:'<think>private</think>reply'}}]})})),/思考标签/);
+});
+test('worker keeps key private, validates sender, calls only configured API',async()=>{
+  let listener,seen,requestCount=0,access;
+  const chrome={runtime:{id:'fixture',getURL:p=>'chrome-extension://fixture/'+p,openOptionsPage:async()=>{},onMessage:{addListener(fn){listener=fn;}}},action:{onClicked:{addListener(){}}},storage:{local:{setAccessLevel:async x=>{access=x;},get:async()=>({aiConfig:config})}},permissions:{contains:async()=>true}};
+  const context={chrome,Set,URL,AbortSignal,fetch:async(url,options)=>{requestCount++;seen={url,options};return {ok:true,json:async()=>({choices:[{message:{content:'测试回复'}}]})};}};
+  context.importScripts=()=>vm.runInContext(fs.readFileSync(path.join(__dirname,'ai-core.js'),'utf8'),context);
+  vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(__dirname,'ai-background.js'),'utf8'),context);
+  const sender={tab:{id:1},url:'https://message.bilibili.com/'};
+  const send=(m,s=sender)=>new Promise(resolve=>listener(m,s,resolve));
+  assert.equal(listener({type:'generate'},{tab:{id:2},url:'https://evil.example/'},()=>{}),undefined);
+  const r=await send({type:'generate',item:{comment:'技术问题'}});
+  assert.equal(r.text,'测试回复');assert.equal(requestCount,1);
+  assert.equal(access.accessLevel,'TRUSTED_CONTEXTS');
+  assert.equal(seen.url,'https://model.example/v1/chat/completions');
+  const status=await send({type:'status'});assert.equal(status.apiKey,undefined);
+  const toutiao=await send({type:'generate',item:{platform:'今日头条',comment:'参数报错',workTitle:'Hermes 更新说明'}},{tab:{id:8},url:'https://mp.toutiao.com/profile_v4/manage/comment/all?enter_from=left_menu'});
+  assert.equal(toutiao.text,'测试回复');
+  assert.equal(JSON.parse(JSON.parse(seen.options.body).messages[1].content).workTitle,'Hermes 更新说明');
+  const douyin=await send({type:'generate',item:{platform:'抖音',workId:'7000000000000000001',comment:'费token',workTitle:'OpenClaw 更新'}},{tab:{id:9},url:'https://creator.douyin.com/creator-micro/work-management/work-detail/7000000000000000001?tabKey=commentManagement'});
+  assert.equal(douyin.text,'测试回复');assert.equal(JSON.parse(JSON.parse(seen.options.body).messages[1].content).workId,'7000000000000000001');
+  const settingsReply=await send({type:'test'},{id:'fixture',url:'chrome-extension://fixture/settings.html',tab:{id:5}});
+  assert.equal(settingsReply.text,'测试回复'); // Extension settings opened in a tab still carry sender.tab.
+});
+test('Chrome DOM: click reply fills correct editor; never publishes; preserves manual edits and route safety',async()=>{
+  const {chromium}=require(process.env.PLAYWRIGHT_PATH||'playwright');
+  const browser=await chromium.launch({...(process.env.BROWSER_EXECUTABLE_PATH?{executablePath:process.env.BROWSER_EXECUTABLE_PATH}:{}),headless:true});
+  try{
+    const page=await browser.newPage();
+    const errors=[];page.on('pageerror',e=>errors.push(e.message));
+    await page.route('https://message.bilibili.com/**',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><html><body><script>window.published=0;window.requests=[];window.delay=0;window.responseError=false;window.chrome={runtime:{sendMessage:async m=>{if(m.type==='settings')return {ok:true};window.requests.push(m);await new Promise(r=>setTimeout(r,window.delay));return window.responseError?{ok:false,error:'API 请求失败（HTTP 401）'}:{ok:true,text:'通常应根据模型名称、显式规则和能力约束选择路由；具体以项目实现为准。'};}}};</script><div class="reply-list"></div><script>
+    function add(id,comment){const row=document.createElement('div');row.id=id;row.className='interaction-item';row.innerHTML='<div class="interaction-item__right"><div class="interaction-item__title">测试作者</div><div class="interaction-item__msg"></div><div class="interaction-item__reference">原评论引用</div><div class="interaction-item__btn reply"><span>回复</span></div></div>';row.querySelector('.interaction-item__msg').textContent=comment;
+    row.querySelector('.reply').onclick=e=>{e.stopPropagation();const existing=row.querySelector('.interaction-item__panel');document.querySelectorAll('.interaction-item__panel').forEach(x=>x.remove());if(existing)return;const panel=document.createElement('div');panel.className='interaction-item__panel';panel.innerHTML='<div class="message-reply-box"><textarea class="message-reply-box__input"></textarea><button class="message-reply-box__pub">发表评论</button></div>';row.querySelector('.interaction-item__right').append(panel);panel.querySelector('textarea').oninput=e=>row.dataset.vueValue=e.target.value;panel.querySelector('button').onclick=()=>window.published++;};document.querySelector('.reply-list').append(row);}add('a','一个请求如何选择 DeepSeek 引擎或其他模型？');add('b','Python 依赖怎么安装？');</script></body></html>`}));
+    await page.goto('https://message.bilibili.com/#/reply');
+    await page.addScriptTag({path:path.join(__dirname,'ai-content.js')});
+    assert.equal(await page.evaluate(()=>requests.length),0);
+    await page.locator('#a .reply span').click();
+    await page.locator('#a .bili-ai-draft-status').getByText('AI 回复已填入',{exact:false}).waitFor();
+    const reply=await page.locator('#a textarea').inputValue();assert.ok(reply.includes('模型名称'));
+    assert.equal(await page.locator('#a').getAttribute('data-vue-value'),reply);
+    assert.equal(await page.evaluate(()=>requests[0].item.comment),'一个请求如何选择 DeepSeek 引擎或其他模型？');
+    assert.equal(await page.evaluate(()=>published),0);
+    await page.locator('#a .reply').click();assert.equal(await page.evaluate(()=>requests.length),1);
+    await page.evaluate(()=>window.delay=400);
+    await page.locator('#b .reply').click();await page.locator('#b textarea').fill('我正在自己回复');
+    await page.locator('#b .bili-ai-draft-status').getByText('你已编辑输入框',{exact:false}).waitFor();
+    assert.equal(await page.locator('#b textarea').inputValue(),'我正在自己回复');
+    await page.locator('#b .reply').click();
+    await page.evaluate(()=>{window.responseError=true;window.delay=0;});
+    await page.locator('#b .reply').click();
+    await page.locator('#b .bili-ai-draft-status').getByText('HTTP 401',{exact:false}).waitFor();
+    assert.equal(await page.locator('#b textarea').inputValue(),'');
+    await page.locator('#b .reply').click();
+    await page.evaluate(()=>{window.responseError=false;window.delay=400;});
+    await page.locator('#a .reply').click();await page.evaluate(()=>location.hash='#/whisper/mid2050969442');
+    await page.waitForTimeout(500);assert.equal(await page.locator('#a textarea').inputValue(),'');
+    const count=await page.evaluate(()=>requests.length);await page.locator('#b .reply').click();assert.equal(await page.evaluate(()=>requests.length),count);
+    assert.equal(await page.evaluate(()=>published),0);assert.deepEqual(errors,[]);
+  }finally{await browser.close();}
+});

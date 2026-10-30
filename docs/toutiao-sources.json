@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-30",
+  "page": "https://mp.toutiao.com/profile_v4/manage/comment/all?enter_from=left_menu",
+  "module": "manage 1.0.0.575",
+  "script": "https://lf-content-ecology.toutiaostatic.com/obj/tt-content-ecology-fe/pgcfe/mp/manage/comment-v2.bb6477c4cb56d385624f.js",
+  "sha256": "BB40C465B1FAFF50B3525A87B81C4974779D7D51557B4CAD9A34780CDA7C6740",
+  "selectors": {
+    "reply": ".comment-item-actions .comment",
+    "selected": ".all-comment-item-wrap.select",
+    "row": ".comment-item",
+    "comment": ".comment-item-content",
+    "editor": ".comment-item-reply-box-showed textarea.byte-textarea",
+    "rightPanel": ".sub-comment-col",
+    "title": ".comment-item-header-extra-title (title attribute preferred)"
+  },
+  "limitation": "Public shipped source + controlled browser fixtures; not authenticated account verification"
+}

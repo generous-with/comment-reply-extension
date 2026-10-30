@@ -1,0 +1,7 @@
+node_modules/
+evidence/
+*.zip
+*.log
+.env
+.env.*
+!.env.example

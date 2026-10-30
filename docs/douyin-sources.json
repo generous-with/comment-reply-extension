@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-30",
+  "page": "https://creator.douyin.com/creator-micro/work-management/work-detail/7000000000000000001?enter_from=content&tabKey=commentManagement",
+  "entry": "https://creator.douyin.com/goofy/douyin_creator_pc/mono/work-management",
+  "script": "https://lf-fe-creator.douyinstatic.com/obj/douyn-creator-scm-cdn/douyin_creator/fe/pc_mono/work-management/static/js/work-management.90eea16b.js",
+  "sha256": "E5583F08524B9288C95558208C7E06626A79330379B612E15E9268F47D9CFCE7",
+  "selectors": {
+    "operations": ".comment-operation-wrap-lc52eY",
+    "button": "button.operation-eC1t7Q with exact text reply",
+    "title": ".info-title-text-QsVcuc,.info-title-text-LseDgG",
+    "comment": ".text-uG7vGS",
+    "row": ".comment-item-o85vW5",
+    "editor": ".editable-input-_mF1vt[contenteditable=true]"
+  },
+  "editorContract": "onInput reads currentTarget.innerHTML; 500 UTF-16 code unit limit",
+  "limitation": "Public shipped source plus controlled fixtures and actual Edge extension with local mock API; not authenticated production verification"
+}

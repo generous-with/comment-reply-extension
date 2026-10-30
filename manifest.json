@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "AI 评论回复助手（B站 / 今日头条 / 抖音）",
+  "version": "0.5.4",
+  "description": "点击 B站、今日头条或抖音作品详情评论的回复按钮，结合评论与作品标题生成自然回复并填入输入框。",
+  "permissions": ["storage", "scripting"],
+  "host_permissions": ["https://www.doubao.com/*"],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "background": {"service_worker": "ai-background.js"},
+  "action": {"default_title": "评论回复助手设置"},
+  "options_page": "settings.html",
+  "content_scripts": [
+    {"matches": ["https://message.bilibili.com/*"], "js": ["ai-content.js"], "run_at": "document_idle"},
+    {"matches": ["https://mp.toutiao.com/profile_v4/*"], "js": ["toutiao-content.js"], "run_at": "document_idle"},
+    {"matches": ["https://creator.douyin.com/creator-micro/*"], "js": ["douyin-content.js"], "run_at": "document_idle"},
+    {"matches": ["https://www.doubao.com/chat/*"], "js": ["doubao-answer.js", "doubao-content.js"], "run_at": "document_idle"}
+  ]
+}
