@@ -1,5 +1,5 @@
 <!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>AI 评论回复设置</title><link rel="stylesheet" href="options.css">
-<main><h1>AI 评论回复助手</h1><p>B站 / 今日头条 / 抖音：点击评论下方“回复”，结合评论和作品标题生成并填写；审核后由你手动发布。</p>
+<link rel="icon" type="image/png" href="assets/icon-32.png"><main><h1 class="brand"><img src="assets/icon-128.png" alt="" width="56" height="56">AI 评论回复助手</h1><p>B站 / 今日头条 / 抖音：点击评论下方“回复”，结合评论和作品标题生成并填写；审核后由你手动发布。</p>
 <form id="form"><label>回复来源<select id="provider"><option value="doubao">豆包网页版（无需 API Key）</option><option value="api">OpenAI 兼容 API</option></select></label>
 <label>豆包评论会话网址（留空新建）<input id="doubaoUrl" type="url" placeholder="https://www.doubao.com/chat/"></label><p>豆包模式会打开专用会话标签页，需提前登录。使用你给出的专家口吻和每条评论独立上下文；浏览器会切换到豆包以完成输入。请不要同时手动操作该专用会话。评论、标题和作者背景将发送给豆包网页版，不调用模型 API。</p>
 <label>API Base URL（如 https://你的服务/v1，也支持完整 chat/completions 地址）<input id="baseUrl" type="url" required placeholder="https://api.example.com/v1"></label>

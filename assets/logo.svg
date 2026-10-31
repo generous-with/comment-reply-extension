@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="AI 评论回复助手">
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="#126B70"/>
+  <path d="M150 136H338Q380 136 380 178V304Q380 346 338 346H228L150 402V346Q108 346 108 304V178Q108 136 150 136Z" fill="#FFF"/>
+  <path d="M230 206L188 248L230 290M192 248H266Q310 248 310 292" fill="none" stroke="#126B70" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M378 76Q387 119 426 126Q387 135 378 176Q369 135 330 126Q369 119 378 76Z" fill="#FFCE70"/>
+</svg>

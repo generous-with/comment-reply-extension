@@ -1,6 +1,6 @@
 {
   "name": "comment-reply-extension",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "private": true,
   "description": "Contextual comment reply drafts for Bilibili, Toutiao and Douyin",
   "license": "MIT",
