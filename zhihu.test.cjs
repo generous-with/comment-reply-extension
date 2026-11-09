@@ -10,7 +10,7 @@ const answer='【一句话介绍】\n先看边界再讨论可行性。\n【回�
 const item={questionId:id,title:'如何理解这个架构？',description:'需要说明模块边界。'};
 test('知乎问题绑定发送方；API 和豆包均使用独立长回答提示，解析同一草稿格式',async()=>{
  let listener,request,webJob,provider='api';
- const config={...core.defaults,baseUrl:'https://model.example/v1',model:'fixture',apiKey:'test-only-key',maxChars:50};
+ const config={...core.defaults,baseUrl:'https://model.example/v1',model:'fixture',apiKey:'test-only-key',maxChars:50,styleSamples:'我会先看这一步是否可复现。'};
  const chrome={runtime:{id:'fixture',getURL:p=>'chrome-extension://fixture/'+p,onMessage:{addListener:f=>listener=f}},action:{onClicked:{addListener(){}}},storage:{local:{setAccessLevel:async()=>{},get:async()=>({aiConfig:{...config,provider}})}},permissions:{contains:async()=>true}};
  const ctx={chrome,URL,AbortSignal,fetch:async(url,options)=>{request=JSON.parse(options.body);return {ok:true,json:async()=>({choices:[{message:{content:answer}}]})};}};
  vm.createContext(ctx);
@@ -25,10 +25,12 @@ test('知乎问题绑定发送方；API 和豆包均使用独立长回答提示�
  const result=await send(item);
  assert.equal(result.ok,true);assert.deepEqual(JSON.parse(JSON.stringify(result.draft)),zhihu.parse(answer));
  assert.equal(JSON.parse(request.messages[1].content).questionDescription,item.description);
+ assert.equal(JSON.parse(request.messages[1].content).styleSamples,config.styleSamples);
  assert.ok(!request.messages[0].content.includes('评论区回复'));
  provider='doubao';assert.equal((await send(item)).draft.intro,'先看边界再讨论可行性。');
  assert.equal(webJob.maxChars,4800);const prompt=require('./doubao-prompt.js').build(core,config,item,'a'.repeat(32),webJob);
  assert.ok(prompt.includes(item.title)&&prompt.includes(item.description));assert.ok(!prompt.includes(config.apiKey));
+ assert.ok(prompt.includes(config.styleSamples));
  assert.throws(()=>zhihu.parse('只有正文'));
  assert.throws(()=>zhihu.parse(answer.replace('先看边界再讨论可行性。','字'.repeat(41))));
 });

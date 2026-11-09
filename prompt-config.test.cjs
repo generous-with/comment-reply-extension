@@ -23,14 +23,21 @@ test('Both backends use custom prompt, legacy and empty values use the shared de
 
 test('Settings migrate old config, persist custom prompt and restore defaults without losing provider or credentials',async()=>{
  const fields={};const form={querySelector:()=>({})};
- for(const id of ['provider','baseUrl','model','apiKey','context','maxChars','enabled','doubaoUrl','replyPrompt','resetPrompt','status','test'])fields[id]={value:'',checked:false,closest:()=>({})};
+ for(const id of ['provider','baseUrl','model','apiKey','context','styleSamples','maxChars','enabled','doubaoUrl','replyPrompt','resetPrompt','status','test'])fields[id]={value:'',checked:false,closest:()=>({})};
  fields.form=form;
- let saved;const old={...core.defaults,provider:'doubao',apiKey:'test-only-key',doubaoUrl:'https://www.doubao.com/chat/12345'};delete old.replyPrompt;
+ let saved;const old={...core.defaults,provider:'doubao',apiKey:'test-only-key',doubaoUrl:'https://www.doubao.com/chat/12345'};delete old.replyPrompt;delete old.styleSamples;
  const ctx={document:{getElementById:id=>fields[id]},ReplyAI:core,URL,chrome:{storage:{local:{get:async()=>({aiConfig:old}),set:async x=>{saved=x.aiConfig;}}}}};
  vm.runInNewContext(fs.readFileSync(__dirname+'/settings.js','utf8'),ctx);await new Promise(setImmediate);
  assert.equal(fields.replyPrompt.value,core.defaults.replyPrompt);
- fields.replyPrompt.value='自定义回复口吻';await fields.form.onsubmit({preventDefault(){}});
+ assert.equal(fields.styleSamples.value,'');
+ fields.styleSamples.value='  先看卡在哪一步。  ';fields.replyPrompt.value='自定义回复口吻';await fields.form.onsubmit({preventDefault(){}});
  assert.equal(saved.replyPrompt,'自定义回复口吻');assert.equal(saved.apiKey,old.apiKey);assert.equal(saved.doubaoUrl,old.doubaoUrl);
+ assert.equal(saved.styleSamples,'先看卡在哪一步。');
+ const item={comment:'跑不起来，怎么办？'};
+ const prompt=core.messages(saved,item);
+ assert.equal(JSON.parse(prompt[1].content).styleSamples,saved.styleSamples);
+ assert.ok(build(core,saved,item).includes(saved.styleSamples));
+ assert.equal(JSON.parse(core.messages(old,item)[1].content).styleSamples,undefined);
  fields.resetPrompt.onclick();assert.equal(fields.replyPrompt.value,core.defaults.replyPrompt);assert.equal(saved.replyPrompt,'自定义回复口吻');
  fields.replyPrompt.value=' ';await fields.form.onsubmit({preventDefault(){}});assert.equal(saved.replyPrompt,core.defaults.replyPrompt);
 });
