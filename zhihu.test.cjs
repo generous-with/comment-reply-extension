@@ -44,12 +44,12 @@ test('知乎回填正文、选择包含剧透、开启送礼物，保护手写�
   <h1 class="QuestionHeader-title">如何理解这个架构？</h1>
   <div class="QuestionRichText"><div class="RichText">需要说明模块边界。</div><button onclick="this.remove()">显示全部</button></div>
   <form class="AnswerForm"><button type="button" aria-label="图片" onclick="window.images++"></button><div id="editor" class="public-DraftEditor-content" contenteditable="true" onpaste="event.preventDefault();this.innerHTML=event.clipboardData.getData('text/html')"></div>
-  <div id="settings" hidden><div><label>创作声明</label><button type="button" role="combobox" id="Popover12-toggle" aria-expanded="false" onclick="this.setAttribute('aria-expanded','true');document.querySelector('#Popover12-content').hidden=false">无声明</button></div><div><label>一句话介绍</label><span class="ztext">原有介绍</span><div onclick="document.querySelector('.Modal').hidden=false">修改<svg class="Zi--Edit"></svg></div></div><label for="gift">开启送礼物</label><input type="radio" id="gift" name="gift" onclick="if(!window.accepted){event.preventDefault();document.querySelector('.RewardForm-rewardModal').hidden=false}"></div></form>
+  <div id="settings" hidden><div><label>创作声明</label><button type="button" role="combobox" id="Popover12-toggle" aria-expanded="false" onclick="this.setAttribute('aria-expanded','true');document.querySelector('#Popover12-content').hidden=false">无声明</button></div><div><label>一句话介绍</label><span class="ztext">原有介绍</span><div onclick="document.querySelector('.Modal').hidden=false;setTimeout(()=>document.querySelector('.TopicBioItem-modifyButton').hidden=false,250)">修改<svg class="Zi--Edit"></svg></div></div><label for="gift">开启送礼物</label><input type="radio" id="gift" name="gift" onclick="if(!window.accepted){event.preventDefault();document.querySelector('.RewardForm-rewardModal').hidden=false}"></div></form>
   <button type="button" onclick="document.querySelector('#settings').hidden=false">发布设置</button>
   <button type="button" onclick="window.published++">发布回答</button></main>
   <div id="Popover12-content" role="listbox" hidden><button type="button" role="option" onclick="const toggle=document.querySelector('#Popover12-toggle');toggle.textContent=this.textContent;toggle.setAttribute('aria-expanded','false');this.parentElement.hidden=true">包含剧透</button></div>
   <div id="unrelated"><button type="button" role="option" onclick="window.published++">包含剧透</button></div>
-  <div class="Modal" hidden>编辑话题经验<button class="TopicBioItem-modifyButton" onclick="this.hidden=true;document.querySelector('#intro').hidden=false">修改</button><input id="intro" placeholder="一句话介绍" value="原有介绍" hidden><button onclick="window.saved++">保存</button><button onclick="this.parentElement.hidden=true">关闭</button></div>
+  <div class="Modal" hidden>编辑话题经验<div class="TopicBioItems"><div class="TopicBioItem"><button class="TopicBioItem-modifyButton" hidden onclick="this.hidden=true;document.querySelector('#intro').hidden=false">修改</button><input id="intro" placeholder="一句话介绍" value="原有介绍" hidden><button onclick="window.saved++">保存</button></div><div class="TopicBioItem"><button class="TopicBioItem-modifyButton" onclick="window.saved++">修改</button></div></div><button onclick="this.parentElement.hidden=true">关闭</button></div>
   <div class="RewardForm-rewardModal" hidden>知乎赞赏功能使用协议<button onclick="window.accepted++;document.querySelector('#gift').checked=true;this.parentElement.hidden=true">确定</button></div>
   <script>window.images=0;window.saved=0;window.accepted=0;window.published=0;window.pending=[];Object.defineProperty(window,'chrome',{value:{runtime:{sendMessage(m){return new Promise(resolve=>pending.push({m,resolve}));}}}});</script>`}));
   await p.goto('https://www.zhihu.com/question/'+id);
@@ -65,10 +65,19 @@ test('知乎回填正文、选择包含剧透、开启送礼物，保护手写�
   assert.equal(await p.locator('#gift').isChecked(),false);
   await p.getByRole('button',{name:'确定',exact:true}).click();
   await p.getByRole('button',{name:'填写一句话介绍'}).click();
-  await p.getByRole('status').getByText(/一句话介绍已填写/).waitFor();
+  await p.locator('#intro').waitFor({state:'visible',timeout:4000});
+  await p.locator('#comment-ai-zhihu [role=status]').getByText(/一句话介绍已填写/).waitFor();
   assert.match(await p.locator('#editor').innerText(),/正文第一段。\s+正文第二段。/);
   assert.equal(await p.locator('#intro').inputValue(),zhihu.parse(answer).intro);
+  assert.match(await p.locator('#comment-ai-zhihu-intro-guide').innerText(),/「保存」，再点「完成」/);
   assert.equal(await p.locator('#gift').isChecked(),true);
+  assert.equal(await p.evaluate(()=>saved),0);
+  await p.getByRole('button',{name:'关闭',exact:true}).click();
+  await p.locator('.TopicBioItem').first().evaluate(card=>{card.querySelector('input').hidden=true;card.querySelector('button').disabled=true;});
+  await p.getByRole('button',{name:'填写一句话介绍'}).click();
+  const guide=p.locator('#comment-ai-zhihu-intro-guide');
+  await guide.getByText(/未找到可用的简介编辑按钮/).waitFor({timeout:6000});
+  assert.match(await guide.innerText(),/建议简介：先看边界再讨论可行性/);
   assert.equal(await p.evaluate(()=>saved),0);
   await p.getByRole('button',{name:'关闭',exact:true}).click();
   await p.locator('#Popover12-toggle').evaluate(e=>{e.textContent='无声明';e.setAttribute('aria-controls','Popover12-content');});

@@ -51,6 +51,22 @@
  const introRow=()=>settingRow('一句话介绍');
  const declaration=()=>{const row=settingRow('创作声明');return row&&one(all(row,'button[role="combobox"]'));};
  const topicDialog=()=>one(all(document,'.Modal').filter(e=>text(e).includes('编辑话题经验')));
+ const introGuideId='comment-ai-zhihu-intro-guide';
+ const introInput=dialog=>one(all(dialog,'input[placeholder="一句话介绍"],textarea[placeholder="一句话介绍"]'));
+ function introModify(dialog){
+  const list=dialog.querySelector('.TopicBioItems');
+  const card=list?.firstElementChild;
+  const scope=list?(card?.matches('.TopicBioItem')?card:null):dialog;
+  return scope&&named(scope,'button.TopicBioItem-modifyButton','修改');
+ }
+ function introGuide(dialog,message,suggestion){
+  let guide=dialog.querySelector('#'+introGuideId);
+  if(!guide){
+   guide=document.createElement('div');guide.id=introGuideId;guide.setAttribute('role','status');
+   (dialog.querySelector('.Modal-content')||dialog).prepend(guide);
+  }
+  guide.textContent=message+(suggestion?'\n建议简介：'+suggestion:'');
+ }
  const agreement=()=>one(all(document,'.RewardForm-rewardModal'));
  const giftLabel=()=>{const form=composer()?.form;return form&&named(form,'label','开启送礼物');};
  const giftInput=()=>{
@@ -110,15 +126,31 @@
   const previous=text(row?.querySelector('.ztext'));
   const edit=row&&one(all(row,'div').filter(e=>text(e)==='修改'&&e.querySelector('svg.Zi--Edit')));
   if(!topicDialog()&&edit)edit.click();
-  const dialog=await wait(topicDialog,valid,1800);
-  if(!dialog||!valid())return '没找到一句话介绍编辑入口，已在草稿区保留';
-  const field=()=>one(all(dialog,'input[placeholder="一句话介绍"],textarea[placeholder="一句话介绍"]'));
-  const modify=one(all(dialog,'button.TopicBioItem-modifyButton'));
-  if(!field()&&modify&&!modify.disabled)modify.click();
-  const input=await wait(field,valid,1800);
-  if(!input||!valid())return '没找到一句话介绍输入框，已在草稿区保留';
+  const field=()=>{const dialog=topicDialog();return dialog&&introInput(dialog);};
+  const finish=(message,suggestion)=>{
+   const dialog=valid()&&topicDialog();
+   if(dialog)introGuide(dialog,message,suggestion);
+   return message;
+  };
+  // The modal shell can render before its author card. Wait for a live control.
+  const ready=await wait(()=>{
+   const dialog=topicDialog();if(!dialog)return null;
+   const input=introInput(dialog);if(input)return {input};
+   const modify=introModify(dialog);
+   return modify&&!modify.disabled&&modify.getAttribute('aria-disabled')!=='true'?{modify}:null;
+  },valid,3500);
+  if(!valid())return '问题或编辑器已切换';
+  if(!ready)return finish('未找到可用的简介编辑按钮。可手动点「修改」并粘贴建议简介，或点「完成」回到回答。',value);
+  if(ready.modify)ready.modify.click();
+  const input=ready.input||await wait(field,valid,2300);
+  if(!valid())return '问题或编辑器已切换';
+  if(!input)return finish('未打开简介输入框。请手动点「修改」并粘贴建议简介。',value);
   const status=setIntro(input,value,previous);
-  return status==='一句话介绍已填写'?status+'，请核对后在知乎窗口保存':status;
+  if(status!=='一句话介绍已填写')return finish(status,value);
+  const confirmed=await wait(()=>field()?.value===value,valid,1200);
+  if(!valid())return '问题或编辑器已切换';
+  return confirmed?finish('一句话介绍已填写。请核对后点「保存」，再点「完成」回到回答。'):
+    finish('未确认简介写入，请核对输入框或手动粘贴建议简介。',value);
  }
  async function settings(draft,valid){
   const messages=[await setDeclaration(valid)];
@@ -139,7 +171,7 @@
  let state;
  function mount(){
   const qid=id(),c=qid&&composer();
-  if(state&&(!c||state.id!==qid||!state.panel.isConnected||state.form!==c.form)){state.panel.remove();state=null;}
+  if(state&&(!c||state.id!==qid||!state.panel.isConnected||state.form!==c.form)){state.panel.remove();document.getElementById(introGuideId)?.remove();state=null;}
   if(!c||state)return;
   const panel=create('section');panel.id='comment-ai-zhihu';
   const run=create('button','AI 生成知乎回答'),add=create('button','插入图片'),config=create('button','扩展设置'),intro=create('button','填写一句话介绍'),spoiler=create('button','设为包含剧透');
