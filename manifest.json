@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "AI 评论回复助手（B站 / 今日头条 / 抖音）",
-  "version": "0.5.6",
+  "name": "AI 评论回复助手（B站 / 今日头条 / 抖音 / 知乎）",
+  "version": "0.6.0",
   "icons": {"16":"assets/icon-16.png","32":"assets/icon-32.png","48":"assets/icon-48.png","128":"assets/icon-128.png"},
-  "description": "点击 B站、今日头条或抖音作品详情评论的回复按钮，结合评论与作品标题生成自然回复并填入输入框。",
+  "description": "生成并填入 B站、今日头条、抖音的评论回复，以及知乎问题的回答草稿。",
   "permissions": ["storage", "scripting"],
   "host_permissions": ["https://www.doubao.com/*"],
   "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
@@ -14,6 +14,7 @@
     {"matches": ["https://message.bilibili.com/*"], "js": ["ai-content.js"], "run_at": "document_idle"},
     {"matches": ["https://mp.toutiao.com/profile_v4/*"], "js": ["toutiao-content.js"], "run_at": "document_idle"},
     {"matches": ["https://creator.douyin.com/creator-micro/*"], "js": ["douyin-content.js"], "run_at": "document_idle"},
-    {"matches": ["https://www.doubao.com/chat/*"], "js": ["doubao-answer.js", "doubao-content.js"], "run_at": "document_idle"}
+    {"matches": ["https://www.doubao.com/chat/*"], "js": ["doubao-answer.js", "doubao-content.js"], "run_at": "document_idle"},
+    {"matches": ["https://www.zhihu.com/question/*"], "js": ["zhihu-answer.js","zhihu-content.js"], "css": ["zhihu-content.css"], "run_at": "document_idle"}
   ]
 }

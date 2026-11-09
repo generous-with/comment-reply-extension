@@ -9,7 +9,7 @@ const http=require('node:http');const assert=require('node:assert/strict');
  // Predeclare ONLY the local fixture origin in an isolated test copy, never in the release.
  const fixtureDir=path.join(__dirname,'evidence','test-extension');fs.mkdirSync(fixtureDir,{recursive:true});
  fs.cpSync(path.join(__dirname,'assets'),path.join(fixtureDir,'assets'),{recursive:true});
- for(const file of ['ai-core.js','ai-background.js','ai-content.js','toutiao-content.js','douyin-content.js','doubao-prompt.js','doubao-worker.js','doubao-answer.js','doubao-content.js','settings.html','settings.js','options.css'])fs.copyFileSync(path.join(__dirname,file),path.join(fixtureDir,file));
+ for(const file of ['ai-core.js','ai-background.js','ai-content.js','toutiao-content.js','douyin-content.js','doubao-prompt.js','doubao-worker.js','doubao-answer.js','doubao-content.js','zhihu-answer.js','zhihu-content.js','zhihu-content.css','settings.html','settings.js','options.css'])fs.copyFileSync(path.join(__dirname,file),path.join(fixtureDir,file));
  const fixtureManifest=JSON.parse(fs.readFileSync(path.join(__dirname,'manifest.json'),'utf8'));fixtureManifest.host_permissions=[...(fixtureManifest.host_permissions||[]),'http://127.0.0.1/*'];fs.writeFileSync(path.join(fixtureDir,'manifest.json'),JSON.stringify(fixtureManifest));
  // Deliberately disable automatic Doubao injection in the test copy. The real worker
  // must recover the missing bridge through scripting.executeScript before sending.

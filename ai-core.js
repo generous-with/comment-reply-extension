@@ -41,14 +41,14 @@
     ].join('\n')},
     {role:'user',content:JSON.stringify({platform:String(item.platform||'B站').slice(0,30),workId:String(item.workId||'').slice(0,100),comment:item.comment,reference:String(item.reference||'').slice(0,6000),workTitle:String(item.workTitle||item.videoTitle||'').slice(0,500),titleTruncated:!!item.titleTruncated,authorBackground:c.context})}];
   }
-  async function generate(c,item,fetcher=fetch){
+  async function generate(c,item,fetcher=fetch,job){
     validate(c);const url=endpoint(c.baseUrl);
-    const response=await fetcher(url,{method:'POST',credentials:'omit',redirect:'error',signal:AbortSignal.timeout(60000),headers:{'Content-Type':'application/json',...(c.apiKey.trim()?{Authorization:'Bearer '+c.apiKey.trim()}:{})},body:JSON.stringify({model:c.model.trim(),messages:messages(c,item),stream:false})});
+    const response=await fetcher(url,{method:'POST',credentials:'omit',redirect:'error',signal:AbortSignal.timeout(60000),headers:{'Content-Type':'application/json',...(c.apiKey.trim()?{Authorization:'Bearer '+c.apiKey.trim()}:{})},body:JSON.stringify({model:c.model.trim(),messages:job?.messages??messages(c,item),stream:false})});
     if(!response.ok) throw Error('API 请求失败（HTTP '+response.status+'），请检查地址、模型、Key 或额度');
     const data=await response.json(); const text=data?.choices?.[0]?.message?.content;
     if(typeof text!=='string'||!text.trim()) throw Error('API 未返回有效回复文字');
     if(/<think[\s>]|<analysis[\s>]/i.test(text)) throw Error('模型返回了思考标签，请使用仅输出最终回复的模型配置');
-    if(text.trim().length>c.maxChars) throw Error('回复超过设定字数，请重新生成或调整长度');
+    if(text.trim().length>(job?.maxChars??c.maxChars)) throw Error('回复超过设定字数，请重新生成或调整长度');
     return text.trim();
   }
   const api={defaults,endpoint,validate,messages,generate};root.ReplyAI=api;if(typeof module!=='undefined')module.exports=api;
