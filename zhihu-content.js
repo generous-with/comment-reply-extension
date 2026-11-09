@@ -101,14 +101,26 @@
   return trigger?.getAttribute('aria-expanded')==='true'||declarationMenus(trigger).length>0;
  }
  async function closeDeclaration(valid){
-  if(!valid()||!declarationOpen())return;
-  const trigger=declaration();
-  if(trigger?.getAttribute('aria-expanded')==='true'&&!trigger.disabled)trigger.click();
-  if(await wait(()=>!declarationOpen(),valid,550)||!valid())return;
+  if(!valid())return;
+  let closedSince=null;
+  const settled=()=>{
+   if(!declaration()||declarationOpen()){closedSince=null;return false;}
+   closedSince??=Date.now();
+   return Date.now()-closedSince>=160;
+  };
+  // Re-clicking the trigger while Zhihu processes the selection can reopen the popup.
+  if(await wait(settled,valid,600)||!valid())return;
+  const outside=document.querySelector('#comment-ai-zhihu [role="status"]');
+  if(outside&&declarationOpen()){
+   outside.dispatchEvent(new PointerEvent('pointerdown',{pointerType:'mouse',bubbles:true,button:0}));
+   outside.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,button:0}));
+   outside.click();
+   if(await wait(settled,valid,700)||!valid())return;
+  }
   const target=declaration();
-  if(target){
+  if(target&&declarationOpen()){
    target.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',bubbles:true,cancelable:true}));
-   await wait(()=>!declarationOpen(),valid,1250);
+   await wait(settled,valid,1000);
   }
  }
  const giftLabel=()=>{const form=composer()?.form;return form&&named(form,'label','开启送礼物');};
@@ -222,8 +234,9 @@
  async function settings(draft,valid){
   const messages=[await setDeclaration(valid)];
   if(!valid())return ['问题或编辑器已切换'];
-  if(declarationOpen()||!declarationApplied())return messages;
-  const gift=giftInput();
+  if(declarationOpen()||!declarationApplied()||topicDialog())return messages;
+  const gift=await wait(giftInput,valid,2600);
+  if(!valid())return messages;
   const initiated=gift&&!gift.checked&&!gift.disabled&&!agreement()&&valid();
   if(initiated)(giftLabel()||gift).click();
   if(!valid())return messages;
@@ -260,18 +273,19 @@
  function mount(){
   const qid=id(),c=qid&&composer();
   if(state&&(!c||state.id!==qid||!state.panel.isConnected||state.form!==c.form)){state.panel.remove();document.getElementById(introGuideId)?.remove();document.getElementById(giftGuideId)?.remove();state=null;}
-  if(!c||state)return;
+  if(!c)return;
+  if(state){state.refresh(c.editor);return;}
   const panel=create('section');panel.id='comment-ai-zhihu';
-  const run=create('button','AI 生成知乎回答'),add=create('button','插入图片'),config=create('button','扩展设置'),intro=create('button','填写一句话介绍'),spoiler=create('button','设为包含剧透');
-  for(const b of [run,add,config,intro,spoiler])b.type='button';
+  const run=create('button','AI 生成知乎回答'),add=create('button','插入图片'),config=create('button','扩展设置'),intro=create('button','填写一句话介绍'),spoiler=create('button','设为包含剧透'),retry=create('button','补做发布设置');
+  for(const b of [run,add,config,intro,spoiler,retry])b.type='button';
   intro.hidden=true;
   const status=create('p');status.setAttribute('role','status');
   const preview=create('details');preview.hidden=true;
   const copy=create('textarea');copy.readOnly=true;copy.rows=7;copy.setAttribute('aria-label','生成的知乎回答草稿');
   const previewLabel=create('summary','查看生成草稿和配图建议');
   preview.append(previewLabel,copy);
-  panel.append(run,add,intro,spoiler,config,status,preview);c.form.before(panel);
-  const current={id:qid,panel,form:c.form};state=current;
+  panel.append(run,add,intro,spoiler,retry,config,status,preview);c.form.before(panel);
+  const current={id:qid,panel,form:c.form,refresh:editor=>{retry.hidden=empty(editor);}};state=current;current.refresh(c.editor);
   const valid=()=>state===current&&qid===id()&&composer()?.form===current.form;
   let latestDraft,resumeSettings=false;
   const settingsResult=(draft,messages)=>['回答正文已填写',...messages,draft.image?'可查看配图建议并插入图片':'','请审核后手动发布'].filter(Boolean).join('；');
@@ -279,8 +293,19 @@
    resumeSettings=!declarationApplied()||declarationOpen();
    spoiler.textContent=resumeSettings?'继续填写发布设置':'设为包含剧透';
   };
+  retry.onclick=async()=>{
+   if(run.disabled||spoiler.disabled||intro.disabled||retry.disabled||!valid()||empty(composer().editor))return;
+   retry.disabled=true;
+   try{
+    status.textContent='正在补做发布设置…';
+    const draft=latestDraft||{intro:''};
+    const messages=await settings(draft,valid);
+    if(valid()){updateResume();status.textContent=settingsResult(draft,messages);}
+   }catch(e){if(valid())status.textContent=e.message;}
+   finally{retry.disabled=false;}
+  };
   spoiler.onclick=async()=>{
-   if(run.disabled||intro.disabled||spoiler.disabled||!valid())return;
+   if(run.disabled||intro.disabled||spoiler.disabled||retry.disabled||!valid())return;
    spoiler.disabled=true;
    try{
     if(resumeSettings&&latestDraft){
@@ -294,7 +319,7 @@
    finally{spoiler.disabled=false;}
   };
   intro.onclick=async()=>{
-   if(!latestDraft||run.disabled||spoiler.disabled||!valid())return;
+   if(!latestDraft||run.disabled||spoiler.disabled||retry.disabled||!valid())return;
    intro.disabled=true;
    try{const result=await fillIntro(latestDraft.intro,valid);if(valid())status.textContent=result;}
    finally{intro.disabled=false;}
@@ -302,7 +327,7 @@
   add.onclick=()=>{const form=composer()?.form,control=form&&button(form,'图片');if(valid()&&control)control.click();};
   config.onclick=()=>chrome.runtime.sendMessage({type:'settings'}).catch(()=>{status.textContent='请点击扩展图标打开设置';});
   run.onclick=async()=>{
-   if(run.disabled||spoiler.disabled||!valid())return;
+   if(run.disabled||spoiler.disabled||retry.disabled||!valid())return;
    const editor=composer().editor;
    if(!empty(editor)){status.textContent='正文已有内容，已保留原草稿。';return;}
    run.disabled=true;preview.hidden=true;preview.open=false;latestDraft=null;intro.hidden=true;
