@@ -1,12 +1,14 @@
 const $=id=>document.getElementById(id);
+const zhihuOptions=['zhihuAutoSaveIntro','zhihuAutoConfirmGift'];
 function mode(){const web=$('provider').value==='doubao';for(const id of ['baseUrl','model','apiKey']){$(id).disabled=web;$(id).closest('label').hidden=web;}$('doubaoUrl').closest('label').hidden=!web;$('baseUrl').required=$('model').required=!web;$('form').querySelector('button[type="submit"]').textContent=web?'保存豆包设置':'保存并授权 API 域名';}
 $('provider').onchange=mode;
 $('resetPrompt').onclick=()=>{$('replyPrompt').value=ReplyAI.defaults.replyPrompt;$('status').textContent='已恢复默认提示词，保存后生效。';};
-(async()=>{const {aiConfig}=await chrome.storage.local.get('aiConfig');const c={...ReplyAI.defaults,...aiConfig};for(const k of ['baseUrl','model','apiKey','context','styleSamples','maxChars'])$(k).value=c[k];$('replyPrompt').value=c.replyPrompt?.trim()||ReplyAI.defaults.replyPrompt;$('enabled').checked=c.enabled;$('provider').value=aiConfig?(aiConfig.provider||'api'):'doubao';$('doubaoUrl').value=c.doubaoUrl??'';mode();})();
+(async()=>{const {aiConfig}=await chrome.storage.local.get('aiConfig');const c={...ReplyAI.defaults,...aiConfig};for(const k of ['baseUrl','model','apiKey','context','styleSamples','maxChars'])$(k).value=c[k];for(const k of zhihuOptions)$(k).checked=c[k]===true;$('replyPrompt').value=c.replyPrompt?.trim()||ReplyAI.defaults.replyPrompt;$('enabled').checked=c.enabled;$('provider').value=aiConfig?(aiConfig.provider||'api'):'doubao';$('doubaoUrl').value=c.doubaoUrl??'';mode();})();
 $('form').onsubmit=async e=>{
   e.preventDefault();
   try{
     const c={provider:$('provider').value,doubaoUrl:$('doubaoUrl').value.trim(),baseUrl:$('baseUrl').value.trim(),model:$('model').value.trim(),apiKey:$('apiKey').value.trim(),context:$('context').value,styleSamples:$('styleSamples').value.trim(),replyPrompt:$('replyPrompt').value.trim()||ReplyAI.defaults.replyPrompt,maxChars:Number($('maxChars').value),enabled:$('enabled').checked};
+    for(const k of zhihuOptions)c[k]=$(k).checked===true;
     if(c.replyPrompt.length>12000)throw Error('回复提示词最多 12000 字');
     if(c.styleSamples.length>2000)throw Error('我的表达样本最多 2000 字');
     if(c.provider==='doubao'){

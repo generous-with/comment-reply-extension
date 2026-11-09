@@ -8,6 +8,11 @@
  const named=(root,selector,label)=>one(all(root,selector).filter(e=>text(e)===label||
     [e.title,e.getAttribute('aria-label')].includes(label)));
  const button=(root,label)=>named(root,'button,[role="button"]',label);
+ const actionable=e=>e&&visible(e)&&!e.disabled&&e.getAttribute('aria-disabled')!=='true';
+ async function publishOptions(){
+  try{return await chrome.runtime.sendMessage({type:'zhihuPublishOptions',questionId:id()});}
+  catch(e){return null;}
+ }
  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
  async function wait(check,valid,ms=3000,interval=80){
   const end=Date.now()+ms;
@@ -58,6 +63,12 @@
   const card=list?.firstElementChild;
   const scope=list?(card?.matches('.TopicBioItem')?card:null):dialog;
   return scope&&named(scope,'button.TopicBioItem-modifyButton','修改');
+ }
+ function introSaved(dialog,value){
+  const card=dialog.querySelector('.TopicBioItems > .TopicBioItem:first-child');
+  const badge=text(card?.querySelector('.AuthorInfo-badge')).replace(/\s*修改$/,'');
+  return !introInput(dialog)&&(text(introRow()?.querySelector('.ztext'))===value||
+   text(card?.querySelector('.ztext'))===value||badge===value);
  }
  function introGuide(dialog,message,suggestion){
   let guide=dialog.querySelector('#'+introGuideId);
@@ -186,29 +197,58 @@
   if(status!=='一句话介绍已填写')return finish(status,value);
   const confirmed=await wait(()=>field()?.value===value,valid,1200);
   if(!valid())return '问题或编辑器已切换';
-  return confirmed?finish('一句话介绍已填写。请核对后点「保存」，再点「完成」回到回答。'):
-    finish('未确认简介写入，请核对输入框或手动粘贴建议简介。',value);
+  if(!confirmed)return finish('未确认简介写入，请核对输入框或手动粘贴建议简介。',value);
+  const options=await publishOptions();
+  if(!valid())return '问题或编辑器已切换';
+  if(options?.ok&&options.autoSaveIntro===true){
+   const dialog=topicDialog();
+   const current=dialog&&introInput(dialog);
+   const form=current?.closest('form');
+   const save=form&&dialog.contains(form)&&named(form,'button','保存');
+   if(current?.value!==value||!actionable(save))return finish('一句话介绍已填写，请核对后手动点「保存 → 完成」。');
+   save.click();
+   if(!await wait(()=>topicDialog()===dialog&&introSaved(dialog,value),valid,5000)){
+    return finish('未能确认简介保存，请在弹窗核对。');
+   }
+   if(!valid())return '问题或编辑器已切换';
+   const done=button(dialog,'完成');
+   if(!actionable(done))return finish('简介已保存，请手动点「完成」回到回答。');
+   done.click();
+   if(await wait(()=>!topicDialog(),valid,1800))return '一句话介绍已保存，已回到回答';
+   return finish('简介已保存，请手动点「完成」回到回答。');
+  }
+  return finish('一句话介绍已填写。请核对后点「保存」，再点「完成」回到回答。');
  }
  async function settings(draft,valid){
   const messages=[await setDeclaration(valid)];
   if(!valid())return ['问题或编辑器已切换'];
   if(declarationOpen()||!declarationApplied())return messages;
   const gift=giftInput();
-  if(gift&&!gift.checked&&!gift.disabled&&!agreement()&&valid())(giftLabel()||gift).click();
+  const initiated=gift&&!gift.checked&&!gift.disabled&&!agreement()&&valid();
+  if(initiated)(giftLabel()||gift).click();
   if(!valid())return messages;
   if(gift){
    await wait(()=>giftInput()?.checked||agreement(),valid,1800);
    const modal=valid()&&agreement();
    if(modal){
+    if(initiated&&text(modal).includes('知乎赞赏功能使用协议')){
+     const options=await publishOptions();
+     if(!valid())return messages;
+     const confirm=agreement()===modal&&button(modal,'确定');
+     if(options?.ok&&options.autoConfirmGift===true&&actionable(confirm))confirm.click();
+    }
+   }
+   const pendingModal=valid()&&agreement();
+   if(pendingModal){
     const guide=document.createElement('p');guide.id=giftGuideId;guide.setAttribute('role','status');
     guide.textContent='如同意知乎协议，请点「确定」；也可以点右上角关闭。弹窗关闭后，扩展会自动继续。';
-    (modal.querySelector('.Modal-content')||modal).prepend(guide);
+    (pendingModal.querySelector('.Modal-content')||pendingModal).prepend(guide);
     const closed=await wait(()=>!agreement(),valid,180000,250);
     guide.remove();
     if(!valid())return messages;
     if(!closed)return [...messages,'送礼物协议仍未处理。关闭后可点「填写一句话介绍」继续'];
-    await wait(()=>giftInput()?.checked,valid,1500);
    }
+   if(initiated&&!giftInput()?.checked)await wait(()=>giftInput()?.checked,valid,1500);
    if(!valid())return messages;
    messages.push(giftInput()?.checked?'送礼物已开启':'送礼物未开启');
   }else messages.push('当前未找到送礼物设置，请手动核对');

@@ -17,8 +17,13 @@ test('知乎问题绑定发送方；API 和豆包均使用独立长回答提示�
  ctx.importScripts=(...files)=>{for(const file of files)vm.runInContext(fs.readFileSync(path.join(__dirname,file),'utf8'),ctx);};
  vm.runInContext(fs.readFileSync(path.join(__dirname,'ai-background.js'),'utf8'),ctx);
  ctx.generateWithDoubao=async(c,i,tab,job)=>{webJob=job;assert.equal(tab,4);return doubaoText;};
- const sender={id:'fixture',tab:{id:4},url:'https://www.zhihu.com/question/'+id+'?from=test'};
+ const sender={id:'fixture',frameId:0,tab:{id:4},url:'https://www.zhihu.com/question/'+id+'?from=test'};
  const send=(i,s=sender)=>new Promise(r=>listener({type:'generateZhihu',item:i},s,r));
+ const options=(s=sender)=>new Promise(r=>listener({type:'zhihuPublishOptions',questionId:id},s,r));
+ assert.deepEqual(JSON.parse(JSON.stringify(await options())),{ok:true,autoSaveIntro:false,autoConfirmGift:false});
+ config.zhihuAutoSaveIntro=true;config.zhihuAutoConfirmGift=true;
+ assert.deepEqual(JSON.parse(JSON.stringify(await options())),{ok:true,autoSaveIntro:true,autoConfirmGift:true});
+ assert.equal((await options({...sender,frameId:1})).ok,false);
  assert.equal(listener({type:'generateZhihu',item},{...sender,url:sender.url.split('?')[0]+'/answer/88'},()=>{}),undefined);
  assert.equal((await send({...item,questionId:'888'})).ok,false);
  assert.equal(request,undefined);
@@ -64,9 +69,9 @@ test('知乎回填正文、选择包含剧透、开启送礼物，保护手写�
   <button type="button" onclick="window.published++">发布回答</button></main>
   <div id="floating-declaration" role="listbox" hidden><button id="spoiler-option" type="button" role="option" onclick="const toggle=document.querySelector('#Popover12-toggle');toggle.textContent=this.textContent;toggle.setAttribute('aria-expanded','false')">包含剧透</button><button type="button" role="option">虚构创作</button><button type="button" role="option">无声明</button></div>
   <div id="unrelated"><button type="button" role="option" onclick="window.published++">包含剧透</button></div>
-  <div class="Modal" hidden>编辑话题经验<div class="TopicBioItems"><div class="TopicBioItem"><button class="TopicBioItem-modifyButton" hidden onclick="this.hidden=true;document.querySelector('#intro').hidden=false">修改</button><input id="intro" placeholder="一句话介绍" value="原有介绍" hidden><button onclick="window.saved++">保存</button></div><div class="TopicBioItem"><button class="TopicBioItem-modifyButton" onclick="window.saved++">修改</button></div></div><button onclick="this.parentElement.hidden=true">关闭</button></div>
+  <div class="Modal" hidden>编辑话题经验<div class="TopicBioItems"><div class="TopicBioItem"><button class="TopicBioItem-modifyButton" hidden onclick="this.hidden=true;document.querySelector('#intro').hidden=false">修改</button><form onsubmit="event.preventDefault();window.saved++;const value=document.querySelector('#intro').value;setTimeout(()=>{document.querySelector('#intro').hidden=true;document.querySelector('#intro-summary').textContent=value;},120)"><input id="intro" placeholder="一句话介绍" value="原有介绍" hidden><button type="submit">保存</button></form><span class="ztext" id="intro-summary">原有介绍</span></div><div class="TopicBioItem"><button class="TopicBioItem-modifyButton" onclick="window.saved++">修改</button></div></div><button onclick="this.parentElement.hidden=true">关闭</button><button onclick="window.completed++;this.parentElement.hidden=true">完成</button></div>
   <div class="RewardForm-rewardModal" hidden>知乎赞赏功能使用协议<button onclick="window.accepted++;document.querySelector('#gift').checked=true;this.parentElement.hidden=true">确定</button><button aria-label="关闭送礼物协议" onclick="this.parentElement.hidden=true">关闭</button></div>
-  <script>window.images=0;window.saved=0;window.accepted=0;window.published=0;window.pending=[];Object.defineProperty(window,'chrome',{value:{runtime:{sendMessage(m){return new Promise(resolve=>pending.push({m,resolve}));}}}});</script>`}));
+  <script>window.images=0;window.saved=0;window.completed=0;window.accepted=0;window.published=0;window.pending=[];window.options={ok:true};Object.defineProperty(window,'chrome',{value:{runtime:{sendMessage(m){if(m.type==='zhihuPublishOptions')return Promise.resolve(options);return new Promise(resolve=>pending.push({m,resolve}));}}}});</script>`}));
   await p.goto('https://www.zhihu.com/question/'+id);
   for(const file of ['zhihu-answer.js','zhihu-content.js'])await p.addScriptTag({path:path.join(__dirname,file)});
   const run=p.getByRole('button',{name:'AI 生成知乎回答'});
@@ -128,10 +133,17 @@ test('知乎回填正文、选择包含剧透、开启送礼物，保护手写�
   assert.equal(await p.evaluate(()=>pending.length),3);
   await p.getByRole('button',{name:'关闭',exact:true}).click();
   await p.locator('#editor').fill('');await run.click();await p.waitForFunction(()=>pending.length===4);
+  await p.evaluate(()=>{window.options={ok:true,autoSaveIntro:true,autoConfirmGift:true};window.accepted=0;document.querySelector('#gift').checked=false;document.querySelector('#intro').hidden=true;});
+  await finish();
+  await p.locator('#comment-ai-zhihu [role=status]').getByText(/一句话介绍已保存，已回到回答/).waitFor({timeout:7000});
+  assert.deepEqual(await p.evaluate(()=>[accepted,saved,completed,published]),[1,1,1,0]);
+  assert.equal(await p.locator('#intro-summary').textContent(),zhihu.parse(answer).intro);
+  assert.equal(await p.locator('.Modal').isVisible(),false);
+  await p.locator('#editor').fill('');await run.click();await p.waitForFunction(()=>pending.length===5);
   await p.locator('#editor').fill('手写草稿');await finish();
   await p.getByRole('status').getByText(/原编辑区已变化/).waitFor();
   assert.equal(await p.locator('#editor').innerText(),'手写草稿');
-  await p.locator('#editor').fill('');await run.click();await p.waitForFunction(()=>pending.length===5);
+  await p.locator('#editor').fill('');await run.click();await p.waitForFunction(()=>pending.length===6);
   const rawDraft='这份原文没有可确认的正文标题。';
   await p.evaluate(rawDraft=>pending.at(-1).resolve({ok:false,error:'豆包已返回内容，但未能识别「回答正文」。请在下方查看原文。',rawDraft}),rawDraft);
   await p.getByRole('status').getByText(/豆包已返回内容/).waitFor();
@@ -139,7 +151,7 @@ test('知乎回填正文、选择包含剧透、开启送礼物，保护手写�
   await raw.waitFor({state:'visible'});
   assert.equal(await raw.inputValue(),rawDraft);
   assert.equal((await p.locator('#editor').innerText()).trim(),'');
-  await run.click();await p.waitForFunction(()=>pending.length===6);
+  await run.click();await p.waitForFunction(()=>pending.length===7);
   await p.evaluate(()=>history.pushState({},'','/question/777'));await finish();
   assert.equal((await p.locator('#editor').innerText()).trim(),'');
   assert.equal(await p.evaluate(()=>published),0);

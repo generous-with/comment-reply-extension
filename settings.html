@@ -10,6 +10,11 @@
 <label>我的表达样本（可选，评论和知乎共用）<textarea id="styleSamples" rows="4" maxlength="2000" placeholder="贴 2–3 条你亲自写过、觉得最像自己口吻的回复，或一小段知乎回答。"></textarea></label><p>模型只参考写法和语气，样本里的事实和经历不当作这次回答的依据。</p>
 <label>回复最多字数<input id="maxChars" type="number" min="50" max="1000" value="240" required></label>
 <label><input id="enabled" type="checkbox" checked style="display:inline;width:auto"> 启用 AI 草稿填写（评论与知乎回答）</label>
+<fieldset><legend>知乎发布设置自动点击</legend>
+<label><input id="zhihuAutoSaveIntro" type="checkbox" style="display:inline;width:auto"> 自动保存一句话介绍并点「完成」</label>
+<p>保存可能更新知乎账号的简介。开启后，仅保存扩展刚填写且核对过的内容。</p>
+<label><input id="zhihuAutoConfirmGift" type="checkbox" style="display:inline;width:auto"> 我已阅读并同意《知乎赞赏功能使用协议》，允许扩展自动点送礼物的「确定」</label>
+<p>未勾选时由你在知乎弹窗确认或关闭。回答始终由你手动发布。</p></fieldset>
 <p class="notice">点击“回复”或“AI 生成知乎回答”时，当前评论或知乎问题、相关上下文、作者背景和你填写的表达样本会发给所配置的 AI 服务。API Key 仅交给你授权的 API 服务；本机存储未加密。</p>
 <button type="submit">保存并授权 API 域名</button> <button id="test" type="button">测试连接</button><p id="status" role="status"></p></form>
 <a href="https://message.bilibili.com/#/reply" target="_blank" rel="noreferrer">B站“回复我的”</a> · <a href="https://mp.toutiao.com/profile_v4/manage/comment/all?enter_from=left_menu" target="_blank" rel="noreferrer">今日头条评论管理</a> · <a href="https://creator.douyin.com/creator-micro/content/manage" target="_blank" rel="noreferrer">抖音内容管理</a><p>配置后刷新对应站点页面。抖音请进入具体作品详情的“评论管理”，点击该条评论的“回复”，不会填顶部通用评论框。优先读取作品完整标题/描述；只有截断文字时会标记给模型。不含头条子回复和 B站私信。</p></main><script src="ai-core.js"></script><script src="settings.js"></script></html>

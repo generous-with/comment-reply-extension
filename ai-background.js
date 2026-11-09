@@ -12,6 +12,9 @@ chrome.runtime.onMessage.addListener((m,sender,respond)=>{
   (async()=>{
     await ready;
     const {aiConfig}=await chrome.storage.local.get('aiConfig');
+    if(m.type==='zhihuPublishOptions'&&zhihuId&&m.questionId===zhihuId&&sender.frameId===0){
+      return {ok:true,autoSaveIntro:aiConfig?.zhihuAutoSaveIntro===true,autoConfirmGift:aiConfig?.zhihuAutoConfirmGift===true};
+    }
     if(m.type==='status'&&page) return {ok:true,configured:aiConfig?.provider==='doubao'||!!aiConfig?.baseUrl,enabled:aiConfig?.enabled!==false};
     if(m.type==='settings'&&(page||zhihuId)){await chrome.runtime.openOptionsPage();return {ok:true};}
     const answer=m.type==='generateZhihu'&&!!zhihuId&&m.item?.questionId===zhihuId;
