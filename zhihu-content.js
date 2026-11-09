@@ -9,12 +9,12 @@
     [e.title,e.getAttribute('aria-label')].includes(label)));
  const button=(root,label)=>named(root,'button,[role="button"]',label);
  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
- async function wait(check,valid,ms=3000){
+ async function wait(check,valid,ms=3000,interval=80){
   const end=Date.now()+ms;
   while(valid()){
    const value=check();if(value)return value;
    if(Date.now()>=end)break;
-   await sleep(80);
+   await sleep(interval);
   }
   return null;
  }
@@ -68,6 +68,24 @@
   guide.textContent=message+(suggestion?'\n建议简介：'+suggestion:'');
  }
  const agreement=()=>one(all(document,'.RewardForm-rewardModal'));
+ const giftGuideId='comment-ai-zhihu-gift-guide';
+ function declarationMenus(trigger){
+  if(!trigger)return [];
+  const ids=[...new Set([...(trigger.getAttribute('aria-controls')||'').split(/\s+/),
+   ...(trigger.getAttribute('aria-owns')||'').split(/\s+/),
+   trigger.id.endsWith('-toggle')?trigger.id.replace(/-toggle$/,'-content'):''].filter(Boolean))];
+  return ids.map(id=>document.getElementById(id)).filter(e=>visible(e)&&(e.matches('[role="listbox"]')||e.querySelector('[role="option"]')));
+ }
+ function declarationOpen(){
+  const trigger=declaration();
+  return trigger?.getAttribute('aria-expanded')==='true'||declarationMenus(trigger).length>0;
+ }
+ async function closeDeclaration(valid){
+  if(!valid()||!declarationOpen())return;
+  const trigger=declaration();
+  if(trigger?.getAttribute('aria-expanded')==='true'&&!trigger.disabled)trigger.click();
+  await wait(()=>!declarationOpen(),valid,1800);
+ }
  const giftLabel=()=>{const form=composer()?.form;return form&&named(form,'label','开启送礼物');};
  const giftInput=()=>{
   const label=giftLabel();
@@ -101,23 +119,29 @@
   if(!trigger)return '未找到创作声明，请核对发布设置';
   const optionName='包含剧透';
   const success='创作声明已设为「包含剧透」';
-  if(text(trigger)===optionName)return success;
-  if(trigger.disabled||trigger.getAttribute('aria-disabled')==='true')return '创作声明当前不可修改，请手动核对';
-  if(trigger.getAttribute('aria-expanded')!=='true')trigger.click();
-  const option=await wait(()=>{
-   const current=declaration();
-   if(current?.getAttribute('aria-expanded')!=='true')return null;
-   const menuId=current.getAttribute('aria-controls')||(current.id.endsWith('-toggle')?current.id.replace(/-toggle$/,'-content'):'');
-   const menu=menuId&&document.getElementById(menuId);
-   return menu&&named(menu,'[role="option"]',optionName);
-  },valid,1800);
-  if(!valid())return '';
-  if(!option||option.disabled||option.getAttribute('aria-disabled')==='true')return '未找到可选的「包含剧透」，请手动核对创作声明';
-  option.click();
-  return await wait(()=>text(declaration())===optionName,valid,1800)?success:'未确认创作声明已更改，请手动核对';
+  let message=success;
+  if(text(trigger)!==optionName){
+   if(trigger.disabled||trigger.getAttribute('aria-disabled')==='true')message='创作声明当前不可修改，请手动核对';
+   else{
+    if(trigger.getAttribute('aria-expanded')!=='true')trigger.click();
+    const option=await wait(()=>{
+     const menus=declarationMenus(declaration());
+     return one([...new Set(menus.flatMap(menu=>all(menu,'[role="option"]').filter(e=>text(e)===optionName)))]);
+    },valid,1800);
+    if(!valid())return '';
+    if(!option||option.disabled||option.getAttribute('aria-disabled')==='true')message='未找到可选的「包含剧透」，请手动核对创作声明';
+    else{
+     option.click();
+     if(!await wait(()=>text(declaration())===optionName,valid,1800))message='未确认创作声明已更改，请手动核对';
+    }
+   }
+  }
+  await closeDeclaration(valid);
+  return declarationOpen()?message+'；请先收起创作声明菜单':message;
  }
  async function fillIntro(value,valid){
-  if(agreement())return '请先处理送礼物协议，再点「填写一句话介绍」';
+  if(agreement())return '请先确认或关闭送礼物协议';
+  if(declarationOpen())return '请先收起创作声明菜单';
   await openSettings(valid);
   if(!valid())return '问题或编辑器已切换';
   const row=introRow();
@@ -155,14 +179,25 @@
  async function settings(draft,valid){
   const messages=[await setDeclaration(valid)];
   if(!valid())return ['问题或编辑器已切换'];
+  if(declarationOpen())return messages;
   const gift=giftInput();
   if(gift&&!gift.checked&&!gift.disabled&&!agreement()&&valid())(giftLabel()||gift).click();
   if(!valid())return messages;
   if(gift){
-   const opened=await wait(()=>giftInput()?.checked||agreement(),valid,1800);
-   if(opened&&giftInput()?.checked)messages.push('送礼物已开启');
-   else if(agreement())return [...messages,'请在知乎窗口确认送礼物协议，再点「填写一句话介绍」'];
-   else messages.push('送礼物未开启，请核对发布设置');
+   await wait(()=>giftInput()?.checked||agreement(),valid,1800);
+   const modal=valid()&&agreement();
+   if(modal){
+    const guide=document.createElement('p');guide.id=giftGuideId;guide.setAttribute('role','status');
+    guide.textContent='如同意知乎协议，请点「确定」；也可以点右上角关闭。弹窗关闭后，扩展会自动继续。';
+    (modal.querySelector('.Modal-content')||modal).prepend(guide);
+    const closed=await wait(()=>!agreement(),valid,180000,250);
+    guide.remove();
+    if(!valid())return messages;
+    if(!closed)return [...messages,'送礼物协议仍未处理。关闭后可点「填写一句话介绍」继续'];
+    await wait(()=>giftInput()?.checked,valid,1500);
+   }
+   if(!valid())return messages;
+   messages.push(giftInput()?.checked?'送礼物已开启':'送礼物未开启');
   }else messages.push('当前未找到送礼物设置，请手动核对');
   if(valid())messages.push(draft.intro?await fillIntro(draft.intro,valid):'本次没有可填写的一句话介绍');
   return messages;
@@ -171,7 +206,7 @@
  let state;
  function mount(){
   const qid=id(),c=qid&&composer();
-  if(state&&(!c||state.id!==qid||!state.panel.isConnected||state.form!==c.form)){state.panel.remove();document.getElementById(introGuideId)?.remove();state=null;}
+  if(state&&(!c||state.id!==qid||!state.panel.isConnected||state.form!==c.form)){state.panel.remove();document.getElementById(introGuideId)?.remove();document.getElementById(giftGuideId)?.remove();state=null;}
   if(!c||state)return;
   const panel=create('section');panel.id='comment-ai-zhihu';
   const run=create('button','AI 生成知乎回答'),add=create('button','插入图片'),config=create('button','扩展设置'),intro=create('button','填写一句话介绍'),spoiler=create('button','设为包含剧透');

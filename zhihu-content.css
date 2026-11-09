@@ -4,4 +4,4 @@
 #comment-ai-zhihu button:disabled{opacity:.6;cursor:wait}
 #comment-ai-zhihu p{margin:4px 0 0}
 #comment-ai-zhihu textarea{box-sizing:border-box;width:100%;margin-top:6px;padding:8px;border:1px solid #a5cccc;background:#fff;color:#203047}
-#comment-ai-zhihu-intro-guide{margin:0 0 12px;padding:8px 10px;border:1px solid #a5cccc;border-radius:6px;background:#f2fafa;color:#15494c;font-size:14px;line-height:1.5;white-space:pre-wrap;user-select:text}
+#comment-ai-zhihu-intro-guide,#comment-ai-zhihu-gift-guide{margin:0 0 12px;padding:8px 10px;border:1px solid #a5cccc;border-radius:6px;background:#f2fafa;color:#15494c;font-size:14px;line-height:1.5;white-space:pre-wrap;user-select:text}
