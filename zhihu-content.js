@@ -69,13 +69,22 @@
  }
  const agreement=()=>one(all(document,'.RewardForm-rewardModal'));
  const giftGuideId='comment-ai-zhihu-gift-guide';
+ const spoilerName='包含剧透';
  function declarationMenus(trigger){
   if(!trigger)return [];
   const ids=[...new Set([...(trigger.getAttribute('aria-controls')||'').split(/\s+/),
    ...(trigger.getAttribute('aria-owns')||'').split(/\s+/),
    trigger.id.endsWith('-toggle')?trigger.id.replace(/-toggle$/,'-content'):''].filter(Boolean))];
-  return ids.map(id=>document.getElementById(id)).filter(e=>visible(e)&&(e.matches('[role="listbox"]')||e.querySelector('[role="option"]')));
+  const linked=ids.map(id=>document.getElementById(id)).filter(e=>visible(e)&&(e.matches('[role="listbox"]')||e.querySelector('[role="option"]')));
+  if(linked.some(menu=>all(menu,'[role="option"]').some(option=>text(option)===spoilerName)))return linked;
+  // A detached portal may have no usable ID; require the unique declaration-specific option set.
+  const fallback=one(all(document,'[role="listbox"]').filter(menu=>{
+   const names=all(menu,'[role="option"]').map(text);
+   return [spoilerName,'虚构创作','无声明'].every(name=>names.includes(name));
+  }));
+  return fallback?[fallback]:linked;
  }
+ const declarationApplied=()=>text(declaration())===spoilerName;
  function declarationOpen(){
   const trigger=declaration();
   return trigger?.getAttribute('aria-expanded')==='true'||declarationMenus(trigger).length>0;
@@ -84,7 +93,12 @@
   if(!valid()||!declarationOpen())return;
   const trigger=declaration();
   if(trigger?.getAttribute('aria-expanded')==='true'&&!trigger.disabled)trigger.click();
-  await wait(()=>!declarationOpen(),valid,1800);
+  if(await wait(()=>!declarationOpen(),valid,550)||!valid())return;
+  const target=declaration();
+  if(target){
+   target.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',bubbles:true,cancelable:true}));
+   await wait(()=>!declarationOpen(),valid,1250);
+  }
  }
  const giftLabel=()=>{const form=composer()?.form;return form&&named(form,'label','开启送礼物');};
  const giftInput=()=>{
@@ -117,22 +131,21 @@
   const trigger=await wait(declaration,valid);
   if(!valid())return '';
   if(!trigger)return '未找到创作声明，请核对发布设置';
-  const optionName='包含剧透';
   const success='创作声明已设为「包含剧透」';
   let message=success;
-  if(text(trigger)!==optionName){
+  if(!declarationApplied()){
    if(trigger.disabled||trigger.getAttribute('aria-disabled')==='true')message='创作声明当前不可修改，请手动核对';
    else{
     if(trigger.getAttribute('aria-expanded')!=='true')trigger.click();
     const option=await wait(()=>{
      const menus=declarationMenus(declaration());
-     return one([...new Set(menus.flatMap(menu=>all(menu,'[role="option"]').filter(e=>text(e)===optionName)))]);
+     return one([...new Set(menus.flatMap(menu=>all(menu,'[role="option"]').filter(e=>text(e)===spoilerName)))]);
     },valid,1800);
     if(!valid())return '';
     if(!option||option.disabled||option.getAttribute('aria-disabled')==='true')message='未找到可选的「包含剧透」，请手动核对创作声明';
     else{
      option.click();
-     if(!await wait(()=>text(declaration())===optionName,valid,1800))message='未确认创作声明已更改，请手动核对';
+     if(!await wait(declarationApplied,valid,1800))message='未确认创作声明已更改，请手动核对';
     }
    }
   }
@@ -179,7 +192,7 @@
  async function settings(draft,valid){
   const messages=[await setDeclaration(valid)];
   if(!valid())return ['问题或编辑器已切换'];
-  if(declarationOpen())return messages;
+  if(declarationOpen()||!declarationApplied())return messages;
   const gift=giftInput();
   if(gift&&!gift.checked&&!gift.disabled&&!agreement()&&valid())(giftLabel()||gift).click();
   if(!valid())return messages;
@@ -220,11 +233,24 @@
   panel.append(run,add,intro,spoiler,config,status,preview);c.form.before(panel);
   const current={id:qid,panel,form:c.form};state=current;
   const valid=()=>state===current&&qid===id()&&composer()?.form===current.form;
-  let latestDraft;
+  let latestDraft,resumeSettings=false;
+  const settingsResult=(draft,messages)=>['回答正文已填写',...messages,draft.image?'可查看配图建议并插入图片':'','请审核后手动发布'].filter(Boolean).join('；');
+  const updateResume=()=>{
+   resumeSettings=!declarationApplied()||declarationOpen();
+   spoiler.textContent=resumeSettings?'继续填写发布设置':'设为包含剧透';
+  };
   spoiler.onclick=async()=>{
    if(run.disabled||intro.disabled||spoiler.disabled||!valid())return;
    spoiler.disabled=true;
-   try{const result=await setDeclaration(valid);if(valid())status.textContent=result;}
+   try{
+    if(resumeSettings&&latestDraft){
+     const messages=await settings(latestDraft,valid);
+     if(valid()){updateResume();status.textContent=settingsResult(latestDraft,messages);}
+    }else{
+     const result=await setDeclaration(valid);
+     if(valid())status.textContent=result;
+    }
+   }
    finally{spoiler.disabled=false;}
   };
   intro.onclick=async()=>{
@@ -240,6 +266,7 @@
    const editor=composer().editor;
    if(!empty(editor)){status.textContent='正文已有内容，已保留原草稿。';return;}
    run.disabled=true;preview.hidden=true;preview.open=false;latestDraft=null;intro.hidden=true;
+   resumeSettings=false;spoiler.textContent='设为包含剧透';
    let edited=false;const onEdit=e=>{if(editor.contains(e.target))edited=true;};
    current.form.addEventListener('input',onEdit,true);
    try{
@@ -268,7 +295,7 @@
     if(!await fillBody(editor,draft.body,valid,()=>edited)){if(valid())status.textContent='未确认正文填入，请从下方草稿复制并核对编辑器。';return;}
     current.form.removeEventListener('input',onEdit,true);
     const messages=await settings(draft,valid);
-    if(valid())status.textContent=['回答正文已填写',...messages,draft.image?'可查看配图建议并插入图片':'','请审核后手动发布'].filter(Boolean).join('；');
+    if(valid()){updateResume();status.textContent=settingsResult(draft,messages);}
    }catch(e){if(valid())status.textContent=e.message;}
    finally{current.form.removeEventListener('input',onEdit,true);run.disabled=false;}
   };
