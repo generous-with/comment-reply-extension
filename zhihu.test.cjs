@@ -33,7 +33,7 @@ test('知乎问题绑定发送方；API 和豆包均使用独立长回答提示�
  assert.throws(()=>zhihu.parse(answer.replace('先看边界再讨论可行性。','字'.repeat(41))));
 });
 
-test('知乎原生编辑区回填正文和简介，开启送礼物，保护手写及切换问题，不发布',async()=>{
+test('知乎回填正文、选择包含剧透、开启送礼物，保护手写及切换问题，不发布',async()=>{
  const {chromium}=require(process.env.PLAYWRIGHT_PATH||'playwright');
  const browser=await chromium.launch({...(process.env.BROWSER_EXECUTABLE_PATH?{executablePath:process.env.BROWSER_EXECUTABLE_PATH}:{}),headless:true});
  try{
@@ -42,9 +42,11 @@ test('知乎原生编辑区回填正文和简介，开启送礼物，保护手�
   <h1 class="QuestionHeader-title">如何理解这个架构？</h1>
   <div class="QuestionRichText"><div class="RichText">需要说明模块边界。</div><button onclick="this.remove()">显示全部</button></div>
   <form class="AnswerForm"><button type="button" aria-label="图片" onclick="window.images++"></button><div id="editor" class="public-DraftEditor-content" contenteditable="true" onpaste="event.preventDefault();this.innerHTML=event.clipboardData.getData('text/html')"></div>
-  <div id="settings" hidden><div><label>一句话介绍</label><span class="ztext">原有介绍</span><div onclick="document.querySelector('.Modal').hidden=false">修改<svg class="Zi--Edit"></svg></div></div><label for="gift">开启送礼物</label><input type="radio" id="gift" name="gift" onclick="if(!window.accepted){event.preventDefault();document.querySelector('.RewardForm-rewardModal').hidden=false}"></div></form>
+  <div id="settings" hidden><div><label>创作声明</label><button type="button" role="combobox" id="Popover12-toggle" aria-expanded="false" onclick="this.setAttribute('aria-expanded','true');document.querySelector('#Popover12-content').hidden=false">无声明</button></div><div><label>一句话介绍</label><span class="ztext">原有介绍</span><div onclick="document.querySelector('.Modal').hidden=false">修改<svg class="Zi--Edit"></svg></div></div><label for="gift">开启送礼物</label><input type="radio" id="gift" name="gift" onclick="if(!window.accepted){event.preventDefault();document.querySelector('.RewardForm-rewardModal').hidden=false}"></div></form>
   <button type="button" onclick="document.querySelector('#settings').hidden=false">发布设置</button>
   <button type="button" onclick="window.published++">发布回答</button></main>
+  <div id="Popover12-content" role="listbox" hidden><button type="button" role="option" onclick="const toggle=document.querySelector('#Popover12-toggle');toggle.textContent=this.textContent;toggle.setAttribute('aria-expanded','false');this.parentElement.hidden=true">包含剧透</button></div>
+  <div id="unrelated"><button type="button" role="option" onclick="window.published++">包含剧透</button></div>
   <div class="Modal" hidden>编辑话题经验<button class="TopicBioItem-modifyButton" onclick="this.hidden=true;document.querySelector('#intro').hidden=false">修改</button><input id="intro" placeholder="一句话介绍" value="原有介绍" hidden><button onclick="window.saved++">保存</button><button onclick="this.parentElement.hidden=true">关闭</button></div>
   <div class="RewardForm-rewardModal" hidden>知乎赞赏功能使用协议<button onclick="window.accepted++;document.querySelector('#gift').checked=true;this.parentElement.hidden=true">确定</button></div>
   <script>window.images=0;window.saved=0;window.accepted=0;window.published=0;window.pending=[];Object.defineProperty(window,'chrome',{value:{runtime:{sendMessage(m){return new Promise(resolve=>pending.push({m,resolve}));}}}});</script>`}));
@@ -56,6 +58,7 @@ test('知乎原生编辑区回填正文和简介，开启送礼物，保护手�
   assert.deepEqual(await p.evaluate(()=>pending[0].m.item),item);
   await finish();
   await p.getByRole('status').getByText(/确认送礼物协议/).waitFor();
+  assert.equal(await p.locator('#Popover12-toggle').innerText(),'包含剧透');
   assert.equal(await p.evaluate(()=>accepted),0);
   assert.equal(await p.locator('#gift').isChecked(),false);
   await p.getByRole('button',{name:'确定',exact:true}).click();
@@ -66,6 +69,13 @@ test('知乎原生编辑区回填正文和简介，开启送礼物，保护手�
   assert.equal(await p.locator('#gift').isChecked(),true);
   assert.equal(await p.evaluate(()=>saved),0);
   await p.getByRole('button',{name:'关闭',exact:true}).click();
+  await p.locator('#Popover12-toggle').evaluate(e=>{e.textContent='无声明';e.setAttribute('aria-controls','Popover12-content');});
+  const existingBody=await p.locator('#editor').innerText();
+  await p.getByRole('button',{name:'设为包含剧透'}).click();
+  await p.getByRole('status').getByText('创作声明已设为「包含剧透」',{exact:true}).waitFor();
+  assert.equal(await p.locator('#Popover12-toggle').innerText(),'包含剧透');
+  assert.equal(await p.locator('#editor').innerText(),existingBody);
+  assert.equal(await p.evaluate(()=>pending.length),1);
   await p.getByRole('button',{name:'插入图片'}).click();assert.equal(await p.evaluate(()=>images),1);
   await p.locator('#editor').fill('');await run.click();await p.waitForFunction(()=>pending.length===2);
   await p.locator('#editor').fill('手写草稿');await finish();

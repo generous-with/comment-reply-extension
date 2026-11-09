@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI 评论回复助手（B站 / 今日头条 / 抖音 / 知乎）",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "icons": {"16":"assets/icon-16.png","32":"assets/icon-32.png","48":"assets/icon-48.png","128":"assets/icon-128.png"},
   "description": "生成并填入 B站、今日头条、抖音的评论回复，以及知乎问题的回答草稿。",
   "permissions": ["storage", "scripting"],
