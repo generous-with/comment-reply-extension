@@ -164,7 +164,7 @@
    else if(agreement())return [...messages,'请在知乎窗口确认送礼物协议，再点「填写一句话介绍」'];
    else messages.push('送礼物未开启，请核对发布设置');
   }else messages.push('当前未找到送礼物设置，请手动核对');
-  if(valid())messages.push(await fillIntro(draft.intro,valid));
+  if(valid())messages.push(draft.intro?await fillIntro(draft.intro,valid):'本次没有可填写的一句话介绍');
   return messages;
  }
  const create=(tag,label)=>{const e=document.createElement(tag);if(label)e.textContent=label;return e;};
@@ -180,7 +180,8 @@
   const status=create('p');status.setAttribute('role','status');
   const preview=create('details');preview.hidden=true;
   const copy=create('textarea');copy.readOnly=true;copy.rows=7;copy.setAttribute('aria-label','生成的知乎回答草稿');
-  preview.append(create('summary','查看生成草稿和配图建议'),copy);
+  const previewLabel=create('summary','查看生成草稿和配图建议');
+  preview.append(previewLabel,copy);
   panel.append(run,add,intro,spoiler,config,status,preview);c.form.before(panel);
   const current={id:qid,panel,form:c.form};state=current;
   const valid=()=>state===current&&qid===id()&&composer()?.form===current.form;
@@ -203,7 +204,7 @@
    if(run.disabled||spoiler.disabled||!valid())return;
    const editor=composer().editor;
    if(!empty(editor)){status.textContent='正文已有内容，已保留原草稿。';return;}
-   run.disabled=true;preview.hidden=true;
+   run.disabled=true;preview.hidden=true;preview.open=false;latestDraft=null;intro.hidden=true;
    let edited=false;const onEdit=e=>{if(editor.contains(e.target))edited=true;};
    current.form.addEventListener('input',onEdit,true);
    try{
@@ -216,10 +217,17 @@
     if(!item.title)throw Error('没读到问题标题，请刷新知乎页面后重试');
     const result=await chrome.runtime.sendMessage({type:'generateZhihu',item});
     if(!valid())return;
-    if(!result?.ok||!result.draft)throw Error(result?.error||'未生成回答');
+    if(!result?.ok||!result.draft){
+     if(typeof result?.rawDraft==='string'&&result.rawDraft){
+      previewLabel.textContent='查看模型原文（未自动填入）';
+      copy.value=result.rawDraft;preview.hidden=false;preview.open=true;
+     }
+     throw Error(result?.error||'未生成回答');
+    }
     const {draft}=result;
-    latestDraft=draft;intro.hidden=false;
-    copy.value=['一句话介绍：'+draft.intro,'回答正文：\n'+draft.body,draft.image?'配图建议：'+draft.image:''].filter(Boolean).join('\n\n');
+    latestDraft=draft;intro.hidden=!draft.intro;
+    previewLabel.textContent='查看生成草稿和配图建议';
+    copy.value=[draft.intro?'一句话介绍：'+draft.intro:'','回答正文：\n'+draft.body,draft.image?'配图建议：'+draft.image:''].filter(Boolean).join('\n\n');
     preview.hidden=false;
     if(edited||composer()?.editor!==editor||!empty(editor)){status.textContent='原编辑区已变化，生成草稿保留在下方，请手动核对。';return;}
     if(!await fillBody(editor,draft.body,valid,()=>edited)){if(valid())status.textContent='未确认正文填入，请从下方草稿复制并核对编辑器。';return;}

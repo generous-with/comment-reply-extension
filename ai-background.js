@@ -20,7 +20,16 @@ chrome.runtime.onMessage.addListener((m,sender,respond)=>{
     if(!settings && !aiConfig.enabled) throw Error('自动填写已关闭');
     const item=m.type==='test'?{comment:'请问这个功能如何配置？'}:m.item;
     const job=answer?{messages:ZhihuAnswer.messages(aiConfig,item),maxChars:ZhihuAnswer.maxChars}:undefined;
-    const result=text=>answer?{ok:true,draft:ZhihuAnswer.parse(text)}:{ok:true,text};
+    const result=text=>{
+      if(!answer)return {ok:true,text};
+      try{return {ok:true,draft:ZhihuAnswer.parse(text)};}
+      catch(e){
+        if(!(e instanceof ZhihuAnswer.FormatError))throw e;
+        const source=aiConfig.provider==='doubao'?'豆包':'模型 API';
+        const rawDraft=typeof text==='string'&&text.length<=ZhihuAnswer.maxChars?text.trim():'';
+        return {ok:false,error:source+'已返回内容，但未能识别「回答正文」。'+(rawDraft?'请在下方查看原文。':'请重新生成。'),rawDraft};
+      }
+    };
     if(aiConfig.provider==='doubao')return result(await generateWithDoubao(aiConfig,item,sender.tab?.id,job));
     const c=ReplyAI.validate(aiConfig);
     const origin=new URL(ReplyAI.endpoint(c.baseUrl)).origin+'/*';

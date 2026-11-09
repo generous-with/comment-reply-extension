@@ -9,14 +9,14 @@ const id='7000000000000000001';
 const answer='【一句话介绍】\n先看边界再讨论可行性。\n【回答正文】\n正文第一段。\n\n正文第二段。\n【配图建议】\n用简图标出模块边界。';
 const item={questionId:id,title:'如何理解这个架构？',description:'需要说明模块边界。'};
 test('知乎问题绑定发送方；API 和豆包均使用独立长回答提示，解析同一草稿格式',async()=>{
- let listener,request,webJob,provider='api';
+ let listener,request,webJob,provider='api',doubaoText=answer;
  const config={...core.defaults,baseUrl:'https://model.example/v1',model:'fixture',apiKey:'test-only-key',maxChars:50,styleSamples:'我会先看这一步是否可复现。'};
  const chrome={runtime:{id:'fixture',getURL:p=>'chrome-extension://fixture/'+p,onMessage:{addListener:f=>listener=f}},action:{onClicked:{addListener(){}}},storage:{local:{setAccessLevel:async()=>{},get:async()=>({aiConfig:{...config,provider}})}},permissions:{contains:async()=>true}};
  const ctx={chrome,URL,AbortSignal,fetch:async(url,options)=>{request=JSON.parse(options.body);return {ok:true,json:async()=>({choices:[{message:{content:answer}}]})};}};
  vm.createContext(ctx);
  ctx.importScripts=(...files)=>{for(const file of files)vm.runInContext(fs.readFileSync(path.join(__dirname,file),'utf8'),ctx);};
  vm.runInContext(fs.readFileSync(path.join(__dirname,'ai-background.js'),'utf8'),ctx);
- ctx.generateWithDoubao=async(c,i,tab,job)=>{webJob=job;assert.equal(tab,4);return answer;};
+ ctx.generateWithDoubao=async(c,i,tab,job)=>{webJob=job;assert.equal(tab,4);return doubaoText;};
  const sender={id:'fixture',tab:{id:4},url:'https://www.zhihu.com/question/'+id+'?from=test'};
  const send=(i,s=sender)=>new Promise(r=>listener({type:'generateZhihu',item:i},s,r));
  assert.equal(listener({type:'generateZhihu',item},{...sender,url:sender.url.split('?')[0]+'/answer/88'},()=>{}),undefined);
@@ -31,8 +31,23 @@ test('知乎问题绑定发送方；API 和豆包均使用独立长回答提示�
  assert.equal(webJob.maxChars,4800);const prompt=require('./doubao-prompt.js').build(core,config,item,'a'.repeat(32),webJob);
  assert.ok(prompt.includes(item.title)&&prompt.includes(item.description));assert.ok(!prompt.includes(config.apiKey));
  assert.ok(prompt.includes(config.styleSamples));
- assert.throws(()=>zhihu.parse('只有正文'));
- assert.throws(()=>zhihu.parse(answer.replace('先看边界再讨论可行性。','字'.repeat(41))));
+ doubaoText='只有正文，没有分区标题。';
+ const malformed=await send(item);
+ assert.equal(malformed.ok,false);
+ assert.match(malformed.error,/豆包已返回内容，但未能识别/);
+ assert.equal(malformed.rawDraft,doubaoText);
+ doubaoText='**一句话介绍：** 先看边界。\n\n## 回答正文\n正文第一段。\n\n正文第二段。\n\n**【配图建议】**：无';
+ const markdown=await send(item);
+ assert.equal(markdown.ok,true);
+ assert.equal(markdown.draft.body,'正文第一段。\n\n正文第二段。');
+ assert.equal(markdown.draft.intro,'先看边界。');
+ assert.equal(markdown.draft.image,'');
+ doubaoText=answer.replace('先看边界再讨论可行性。','字'.repeat(41)).split('【配图建议】')[0].trim();
+ const partial=await send(item);
+ assert.equal(partial.ok,true);
+ assert.equal(partial.draft.body,markdown.draft.body);
+ assert.equal(partial.draft.intro,'');
+ assert.throws(()=>zhihu.parse('【回答正文】正文\n【回答正文】重复'));
 });
 
 test('知乎回填正文、选择包含剧透、开启送礼物，保护手写及切换问题，不发布',async()=>{
@@ -93,6 +108,14 @@ test('知乎回填正文、选择包含剧透、开启送礼物，保护手写�
   await p.getByRole('status').getByText(/原编辑区已变化/).waitFor();
   assert.equal(await p.locator('#editor').innerText(),'手写草稿');
   await p.locator('#editor').fill('');await run.click();await p.waitForFunction(()=>pending.length===3);
+  const rawDraft='这份原文没有可确认的正文标题。';
+  await p.evaluate(rawDraft=>pending.at(-1).resolve({ok:false,error:'豆包已返回内容，但未能识别「回答正文」。请在下方查看原文。',rawDraft}),rawDraft);
+  await p.getByRole('status').getByText(/豆包已返回内容/).waitFor();
+  const raw=p.getByRole('textbox',{name:'生成的知乎回答草稿'});
+  await raw.waitFor({state:'visible'});
+  assert.equal(await raw.inputValue(),rawDraft);
+  assert.equal((await p.locator('#editor').innerText()).trim(),'');
+  await run.click();await p.waitForFunction(()=>pending.length===4);
   await p.evaluate(()=>history.pushState({},'','/question/777'));await finish();
   assert.equal((await p.locator('#editor').innerText()).trim(),'');
   assert.equal(await p.evaluate(()=>published),0);
