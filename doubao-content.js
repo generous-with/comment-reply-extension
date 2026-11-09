@@ -4,7 +4,7 @@
  function stage(text){let panel=document.getElementById('comment-doubao-status');if(!panel){panel=document.createElement('div');panel.id='comment-doubao-status';panel.setAttribute('role','status');panel.style.cssText='position:fixed;bottom:18px;left:18px;z-index:2147483647;max-width:460px;padding:12px 16px;background:#edf7fa;border:1px solid #86afbc;border-radius:8px;color:#204b5c;font:14px/1.6 system-ui;white-space:pre-wrap';document.documentElement.append(panel);}panel.textContent='评论助手 v'+version+'\n'+text;}
  stage('豆包桥接已连接，等待评论任务');
  const visible=e=>e&&e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden';
- const wait=(check,ms)=>new Promise((resolve,reject)=>{const start=Date.now();const t=setInterval(()=>{try{const result=check();if(result){clearInterval(t);resolve(result);}else if(Date.now()-start>ms){clearInterval(t);reject(Error('豆包页面等待超时，请确认登录和会话状态'));}}catch(e){clearInterval(t);reject(e);}},250);});
+ const wait=(check,ms,timeout='豆包页面等待超时，请确认登录和会话状态')=>new Promise((resolve,reject)=>{const start=Date.now();const t=setInterval(()=>{try{const result=check();if(result){clearInterval(t);resolve(result);}else if(Date.now()-start>ms){clearInterval(t);reject(Error(timeout));}}catch(e){clearInterval(t);reject(e);}},250);});
  chrome.runtime.onMessage.addListener((m,sender,respond)=>{
   if(sender.id!==chrome.runtime.id)return;
   if(m.type==='doubaoPing:'+version){respond({ok:true,version});return;}
@@ -36,12 +36,14 @@
     const stop=[...document.querySelectorAll('[data-testid="chat_input_local_break_button"]')].some(visible);
     // The prompt never contains the complete nonce markers. Ignore hidden elements and the composer.
     const candidates=[...document.querySelectorAll('p,div,span')].filter(e=>e.textContent.includes(m.token)&&visible(e)&&!e.closest('.ProseMirror,[data-testid="chat_input"]')).map(e=>e.innerText||'').sort((a,b)=>a.length-b.length);
-    const text=candidates.map(s=>DoubaoAnswer.extract(s,m.token)).find(Boolean);if(!text||stop)return false;
-    if(!text||/<think|<analysis/i.test(text))return false;
-    if(text.length>m.maxChars)throw Error('豆包回复超过设置的'+m.maxChars+'字，未取回；请调整长度后重试');
+    const text=candidates.map(s=>DoubaoAnswer.extract(s,m.token)).find(Boolean);
+    if(!text||/<think|<analysis/i.test(text)){last='';return false;}
     if(text!==last){last=text;stable=Date.now();return false;}
-    if(Date.now()-stable>=1250){stage('已取回完整回答，正在返回原评论页');return {ok:true,text,url:location.href};}return false;
-   },150000);
+    // A stable, nonce-matched end marker is stronger evidence than a stale stop button.
+    if(Date.now()-stable<(stop?2500:1250))return false;
+    if(text.length>m.maxChars)throw Error('豆包回复超过设置的'+m.maxChars+'字，未取回；请调整长度后重试');
+    stage('已取回完整回答，正在返回原页面');return {ok:true,text,url:location.href};
+   },150000,'豆包等待超时：未找到本次完整回答标记。请检查回答末尾是否有结束标记，或手动复制豆包答案。');
   })().then(respond,e=>{stage('已停止：'+e.message);respond({ok:false,error:e.message});}).finally(()=>{busy=false;});
   return true;
  });

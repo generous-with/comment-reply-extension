@@ -13,3 +13,28 @@ test('Doubao owned conversation creation, reuse, closed-tab recovery and no API 
  tabs.clear();await ctx.generateWithDoubao(c,{comment:'报错了'});assert.equal(created,2);assert.equal(state.doubaoBinding.url,'https://www.doubao.com/chat/5678');
  await assert.rejects(ctx.generateWithDoubao({...c,doubaoUrl:'https://evil.example/chat/123'},{comment:'x'}),/会话地址/);
 });
+
+test('Doubao returns to the source tab when the completed response cannot be read, without interrupting a user switch',async()=>{
+ for(const switched of [false,true]){
+  let active=1;
+  const version=require('./manifest.json').version;
+  const source={id:1,windowId:1,url:'https://www.zhihu.com/question/123'};
+  const doubao={id:2,windowId:1,url:'https://www.doubao.com/chat/123'};
+  const tabs=new Map([[1,source],[2,doubao],[3,{id:3,windowId:1}]]);
+  const state={doubaoBinding:{configured:doubao.url,tabId:2,url:doubao.url}};
+  const chrome={runtime:{getManifest:()=>({version})},storage:{local:{get:async()=>state,set:async x=>Object.assign(state,x)}},tabs:{
+   get:async id=>tabs.get(id),
+   query:async()=>[tabs.get(active)],
+   update:async id=>{active=id;return tabs.get(id);},
+   sendMessage:async(id,m)=>{
+    if(m.type.startsWith('doubaoPing:'))return {ok:true,version};
+    if(switched)active=3;
+    return {ok:false,error:'豆包未输出完整回答标记'};
+   }
+  }};
+  const ctx={chrome,URL,crypto:require('node:crypto').webcrypto,ReplyAI:require('./ai-core.js'),DoubaoPrompt:require('./doubao-prompt.js'),setInterval:()=>1,clearInterval:()=>{},setTimeout};
+  vm.createContext(ctx);vm.runInContext(fs.readFileSync(__dirname+'/doubao-worker.js','utf8'),ctx);
+  await assert.rejects(ctx.generateWithDoubao({doubaoUrl:doubao.url,context:'',maxChars:240},{comment:'如何配置？'},1),/完整回答标记/);
+  assert.equal(active,switched?3:1);
+ }
+});

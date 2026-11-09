@@ -5,6 +5,7 @@ const http=require('node:http');const assert=require('node:assert/strict');
  let received,apiCalls=0;
  const server=http.createServer((req,res)=>{let body='';req.on('data',x=>body+=x);req.on('end',()=>{apiCalls++;received={url:req.url,auth:req.headers.authorization,body:JSON.parse(body)};res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({choices:[{message:{content:'通常需要按模型名和显式配置选择路由，具体以项目实现为准。'}}]}));});});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ server.unref();
  // Headless Edge cannot confirm its browser-chrome optional permission bubble.
  // Predeclare ONLY the local fixture origin in an isolated test copy, never in the release.
  const fixtureDir=path.join(__dirname,'evidence','test-extension');fs.mkdirSync(fixtureDir,{recursive:true});
@@ -58,21 +59,31 @@ const http=require('node:http');const assert=require('node:assert/strict');
   assert.ok(await dy.locator('#a > .comment-main-YV_lqD > .comment-operation-wrap-lc52eY [contenteditable]').textContent());assert.equal(await dy.locator('#top-composer [contenteditable]').textContent(),'');assert.equal(await dy.evaluate(()=>published),0);
   await dy.screenshot({path:path.join(__dirname,'evidence','douyin-autofill.png'),fullPage:true});
   const beforeDoubao=apiCalls;
-  await browser.route('https://www.doubao.com/chat/**',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><textarea data-testid="chat_input_input"></textarea><button data-testid="chat_input_send_button">发送</button><button data-testid="chat_input_local_break_button" style="display:none">停止</button><div id="answers"><p>旧回答，不可用于新评论</p></div><script>window.sentPrompts=[];document.querySelector('[data-testid="chat_input_send_button"]').onclick=()=>{const input=document.querySelector('textarea');const prompt=input.value;sentPrompts.push(prompt);const token=prompt.match(/请求标识：([a-f0-9]{32})/)[1];input.value='';const stop=document.querySelector('[data-testid="chat_input_local_break_button"]');stop.style.display='block';const p=document.createElement('p');document.getElementById('answers').append(p);p.textContent='【评论回复：'+token+'】先对一下 Node 的版本。';setTimeout(()=>{p.textContent+='这类升级报错可以先贴一下完整日志。【结束：'+token+'】';stop.style.display='none';},250);};</script>`}));
-  await page.bringToFront();await page.locator('#provider').selectOption('doubao');await page.getByRole('button',{name:'保存豆包设置'}).click();
+  await browser.route('https://www.doubao.com/chat/**',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><textarea data-testid="chat_input_input"></textarea><button data-testid="chat_input_send_button">发送</button><button data-testid="chat_input_local_break_button" style="display:none">停止</button><div id="answers"><p>旧回答，不可用于新评论</p></div><script>window.sentPrompts=[];document.querySelector('[data-testid="chat_input_send_button"]').onclick=()=>{const input=document.querySelector('textarea');const prompt=input.value;sentPrompts.push(prompt);const token=prompt.match(/请求标识：([a-f0-9]{32})/)[1];input.value='';const stop=document.querySelector('[data-testid="chat_input_local_break_button"]');stop.style.display='block';const p=document.createElement('p');document.getElementById('answers').append(p);p.textContent='【评论回复：'+token+'】先对一下 Node 的版本。';setTimeout(()=>{p.textContent+='这类升级报错可以先贴一下完整日志。【结束：'+token+'】';},250);};</script>`}));
+  const fixtureDoubaoUrl='https://www.doubao.com/chat/12345678901234567';
+  await page.bringToFront();await page.locator('#provider').selectOption('doubao');
+  await page.locator('#doubaoUrl').fill(fixtureDoubaoUrl);
+  await page.getByRole('button',{name:'保存豆包设置'}).click();
   await page.waitForFunction(()=>document.getElementById('status').textContent.includes('已保存豆包网页版模式'));
   // Pre-open the fixture before seeding its owned-tab binding. Chrome-created tabs can
   // start navigating before Playwright attaches interception; do not use live Doubao in this test.
-  const controlledDb=await browser.newPage();await controlledDb.goto('https://www.doubao.com/chat/12345678901234567');await controlledDb.locator('#answers').waitFor();
+  const controlledDb=await browser.newPage();await controlledDb.goto(fixtureDoubaoUrl);await controlledDb.locator('#answers').waitFor();
   assert.equal(await controlledDb.locator('#comment-doubao-status').count(),0);
   console.log('FIXTURE URL',controlledDb.url());
-  await worker.evaluate(async()=>{const url='https://www.doubao.com/chat/12345678901234567';const tabs=await chrome.tabs.query({});const tab=tabs.find(t=>t.url===url);if(!tab)throw Error('Missing fixture tab: '+JSON.stringify(tabs.map(t=>({id:t.id,url:t.url}))));await chrome.storage.local.set({doubaoBinding:{configured:url,url,tabId:tab.id}});});
-  await dy.bringToFront();await dy.locator('#b > .comment-main-YV_lqD > .comment-operation-wrap-lc52eY .operations-AVKfA7 button').first().click();
-  await controlledDb.waitForFunction(()=>window.sentPrompts?.length===1);
+  await worker.evaluate(async url=>{const tabs=await chrome.tabs.query({});const tab=tabs.find(t=>t.url===url);if(!tab)throw Error('Missing fixture tab');const {aiConfig}=await chrome.storage.local.get('aiConfig');if(aiConfig?.doubaoUrl!==url)throw Error('Fixture settings do not match the preopened tab');await chrome.storage.local.set({doubaoBinding:{configured:url,url,tabId:tab.id}});},fixtureDoubaoUrl);
+  await dy.bringToFront();
+  const sourceId=await worker.evaluate(async()=>(await chrome.tabs.query({active:true,lastFocusedWindow:true}))[0]?.id);
+  assert.ok(sourceId);
+  await dy.locator('#b > .comment-main-YV_lqD > .comment-operation-wrap-lc52eY .operations-AVKfA7 button').first().click();
+  await controlledDb.waitForFunction(()=>window.sentPrompts?.length===1,undefined,{timeout:10000}).catch(async e=>{
+   console.log('Doubao fixture status:',await controlledDb.locator('#comment-doubao-status').textContent({timeout:1000}).catch(()=>'(bridge not injected)'));
+   throw e;
+  });
   // Simulate Douyin refreshing its comment DOM while its tab is away at Doubao.
   await dy.locator('#b').evaluate(row=>{const fresh=row.cloneNode(true);fresh.querySelector('.time-qUi7iL').textContent='9小时前';row.replaceWith(fresh);window.dispatchEvent(new PopStateEvent('popstate'));});
   await dy.locator('#b .douyin-ai-draft-status').getByText('AI 回复已填入',{exact:false}).waitFor({timeout:12000}).catch(async e=>{console.log('DOUBAO STATUS',await dy.locator('#b .douyin-ai-draft-status').textContent());for(const p of browser.pages().filter(p=>p.url().includes('doubao.com')))console.log('DB',p.url(),await p.evaluate(()=>({sent:window.sentPrompts?.length,answer:document.getElementById('answers')?.innerText,input:document.querySelector('textarea')?.value.length})));throw e;});
   assert.equal(await dy.locator('#b [contenteditable]').textContent(),'先对一下 Node 的版本。这类升级报错可以先贴一下完整日志。');assert.equal(apiCalls,beforeDoubao);
+  assert.equal(await worker.evaluate(async()=>(await chrome.tabs.query({active:true,lastFocusedWindow:true}))[0]?.id),sourceId);
   const db=browser.pages().find(p=>p.url().startsWith('https://www.doubao.com/chat/'));assert.ok(db);const prompts=await db.evaluate(()=>sentPrompts);assert.equal(prompts.length,1);assert.ok(prompts[0].includes('升级时提示 Node 版本不够'));assert.ok(prompts[0].includes('开发、运维专家'));assert.ok(!prompts[0].includes('fixture-key'));assert.equal(await dy.evaluate(()=>published),0);
   assert.ok((await db.locator('#comment-doubao-status').textContent()).includes('已取回完整回答'));
   // Keep an evidence record of the web-only route, not a real Doubao/model validation.

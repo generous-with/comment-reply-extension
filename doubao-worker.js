@@ -3,14 +3,19 @@ let doubaoBusy=false;
 async function generateWithDoubao(c,item,sourceTab,job){
  if(doubaoBusy)throw Error('豆包正在处理另一条评论，请完成后再点回复');
  doubaoBusy=true;
+ let tab,source;
  try{
   const url=new URL(c.doubaoUrl?.trim()||'https://www.doubao.com/chat/');
   if(url.origin!=='https://www.doubao.com'||!/^\/chat\/(?:\d+)?$/.test(url.pathname))throw Error('请填写 www.doubao.com/chat/ 的会话地址');
   const token=crypto.randomUUID().replaceAll('-','');const prompt=DoubaoPrompt.build(ReplyAI,c,item,token,job);
-  const {doubaoBinding}=await chrome.storage.local.get('doubaoBinding');let tab;
+  if(sourceTab)source=await chrome.tabs.get(sourceTab).catch(()=>null);
+  const {doubaoBinding}=await chrome.storage.local.get('doubaoBinding');
   if(doubaoBinding?.configured===url.href){try{const t=await chrome.tabs.get(doubaoBinding.tabId);if(t.url===doubaoBinding.url)tab=t;}catch(e){}}
-  if(!tab){tab=await chrome.tabs.create({url:doubaoBinding?.configured===url.href?doubaoBinding.url:url.href,active:true});await chrome.storage.local.set({doubaoBinding:{configured:url.href,tabId:tab.id,url:tab.url||url.href}});}
-  else await chrome.tabs.update(tab.id,{active:true});
+  if(!tab){
+   tab=await chrome.tabs.create({url:doubaoBinding?.configured===url.href?doubaoBinding.url:url.href,active:true,windowId:source?.windowId});
+   await chrome.storage.local.set({doubaoBinding:{configured:url.href,tabId:tab.id,url:tab.url||url.href}});
+  }else await chrome.tabs.update(tab.id,{active:true});
+  if(source?.windowId!=null&&tab.windowId!=null&&source.windowId!==tab.windowId)await chrome.windows.update(tab.windowId,{focused:true}).catch(()=>{});
   const deadline=Date.now()+30000;let connected=false,lastInject=0;
   const version=chrome.runtime.getManifest().version;
   while(Date.now()<deadline){
@@ -24,9 +29,18 @@ async function generateWithDoubao(c,item,sourceTab,job){
   try{
    const result=await chrome.tabs.sendMessage(tab.id,{type:'doubaoRun:'+version,token,prompt,maxChars:job?.maxChars??c.maxChars});
    if(!result?.ok)throw Error(result?.error||'豆包连接中断，请检查会话后重试');
-   if(result.url?.startsWith('https://www.doubao.com/chat/'))await chrome.storage.local.set({doubaoBinding:{configured:url.href,tabId:tab.id,url:result.url}});
-   if(sourceTab){const active=await chrome.tabs.query({active:true,currentWindow:true});if(active[0]?.id===tab.id)await chrome.tabs.update(sourceTab,{active:true}).catch(()=>{});}
+   if(result.url?.startsWith('https://www.doubao.com/chat/'))await chrome.storage.local.set({doubaoBinding:{configured:url.href,tabId:tab.id,url:result.url}}).catch(()=>{});
    return result.text;
   }finally{clearInterval(keepAlive);}
- }finally{doubaoBusy=false;}
+ }finally{
+  try{
+   if(tab&&sourceTab){
+    const [active]=await chrome.tabs.query({active:true,lastFocusedWindow:true});
+    if(active?.id===tab.id){
+     const destination=await chrome.tabs.update(sourceTab,{active:true});
+     if(destination?.windowId!=null&&destination.windowId!==active.windowId)await chrome.windows.update(destination.windowId,{focused:true});
+    }
+   }
+  }catch(e){}finally{doubaoBusy=false;}
+ }
 }
